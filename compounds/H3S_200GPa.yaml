@@ -1,0 +1,57 @@
+# ════════════════════════════════════════════════════════════════
+#  Compound: H₃S (Im-3m) at 200 GPa  — VALIDATED PoC
+#  Expected: Allen-Dynes Tc ≈ 216 K, ω_log ≈ 76 meV
+#  Experimental: Tc = 203 K at 150 GPa (Drozdov et al. 2015)
+# ════════════════════════════════════════════════════════════════
+
+compound:
+  prefix:       "H3S"
+  pressure_GPa:  200.0
+
+structure:
+  ibrav: 3           # BCC primitive cell (Im-3m space group)
+  A:     2.986089    # Conventional BCC cube edge (Å) from vc-relax at 200 GPa
+                     # Set to null to run vc-relax first and determine automatically
+  nat:  4
+  ntyp: 2
+  species:
+    - {symbol: S,  mass: 32.065,   pseudo: S.pbe-n-rrkjus_psl.1.0.0.UPF}
+    - {symbol: H,  mass: 1.00794,  pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
+  positions:          # Wyckoff positions in crystal (BCC primitive) coordinates
+    - [S, 0.0, 0.0, 0.0]   # S at 2a site
+    - [H, 0.0, 0.5, 0.5]   # H at 6b site (face centers of conventional cube)
+    - [H, 0.5, 0.0, 0.5]
+    - [H, 0.5, 0.5, 0.0]
+
+wannier:
+  nbndsub:     7              # S:sp3 (4) + 3×H:s (3)
+  nbnd:        20             # Total bands in NSCF (extra for disentanglement)
+  projections:
+    - "S:sp3"
+    - "H:s"
+  dis_win_min:  -9.0          # eV — below S 3s minimum (-7.64 eV at Γ)
+  dis_win_max:  36.0          # eV — above all 7 bands at every k-point
+  dis_froz_min: -9.0          # eV
+  dis_froz_max:  20.0         # eV — ~2.5 eV above Fermi (17.4 eV)
+
+eliashberg:
+  muc:            0.10        # Coulomb pseudopotential (literature: 0.10–0.13)
+  temperatures_K: [150, 175, 185, 195, 205, 225]
+
+dft:
+  ecutwfc:    80.0
+  ecutrho:   800.0
+  degauss:     0.02
+  scf_kgrid:  [8, 8, 8]      # SCF k-grid (dense, with symmetry reduction)
+  coarse_kgrid: [4, 4, 4]   # ph.x q-grid AND EPW coarse k/q-grid (must match)
+
+epw:
+  fine_kgrid:  [10, 10, 10]  # Fine interpolation grid for Eliashberg
+                              # Use [20,20,20] for production (more accurate, ~8× slower)
+  fsthick:     0.6            # eV — Fermi surface thickness for e-ph sampling
+  wscut:       3.0            # eV — Matsubara cutoff (~10× max phonon freq)
+                              # H3S max phonon ~210 meV → wscut ≥ 2.1 eV
+
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"

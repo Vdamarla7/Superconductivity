@@ -1,0 +1,63 @@
+# ════════════════════════════════════════════════════════════════
+#  Compound: H₃Se (Im-3m) at 150 GPa
+#  Reference: Wang et al., Sci. Rep. 5, 13303 (2015)
+#  Expected: Allen-Dynes Tc ≈ 100–130 K (peak pressure range)
+#
+#  Note: Switched from 200 GPa — at 200 GPa H3Se is over-compressed,
+#  band structure has only 1 band below Ef at Gamma (sparse Fermi surface),
+#  Wannier interpolation gives nkfs=0 on 10^3 fine grid.
+#  150 GPa is closer to the predicted peak Tc pressure.
+# ════════════════════════════════════════════════════════════════
+
+compound:
+  prefix:       "H3Se150"
+  pressure_GPa:  150.0
+
+structure:
+  ibrav: 3
+  A:     3.30        # Initial guess; literature ~3.20-3.35 Å at 150 GPa. vc-relax will refine.
+  nat:  4
+  ntyp: 2
+  species:
+    - {symbol: Se, mass: 78.960,   pseudo: Se.pbe-n-rrkjus_psl.1.0.0.UPF}
+    - {symbol: H,  mass: 1.00794,  pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
+  positions:
+    - [Se, 0.0, 0.0, 0.0]
+    - [H,  0.0, 0.5, 0.5]
+    - [H,  0.5, 0.0, 0.5]
+    - [H,  0.5, 0.5, 0.0]
+
+wannier:
+  nbndsub:     7
+  nbnd:        20
+  bands_skipped: null
+  projections:
+    - "Se:s"
+    - "Se:p"
+    - "H:s"
+  # Windows set relative to NSCF Ef — check nscf.out after running
+  # and adjust if fine-grid Ef shifts by more than 0.5 eV
+  dis_win_min:  -9.0
+  dis_win_max:   36.0
+  dis_froz_min: -9.0
+  dis_froz_max:  15.0   # will be updated after checking NSCF Ef at 150 GPa
+
+eliashberg:
+  muc:            0.10
+  temperatures_K: [50, 75, 100, 110, 120, 130, 150]
+
+dft:
+  ecutwfc:    80.0
+  ecutrho:   800.0
+  degauss:     0.02
+  scf_kgrid:  [8, 8, 8]
+  coarse_kgrid: [4, 4, 4]
+
+epw:
+  fine_kgrid:  [10, 10, 10]
+  fsthick:     1.5
+  wscut:       2.0
+
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"

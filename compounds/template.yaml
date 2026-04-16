@@ -1,0 +1,90 @@
+# ════════════════════════════════════════════════════════════════
+#  EPW Pipeline — Compound Template
+#  Copy this file and edit the sections marked ← EDIT
+#  Everything else can usually stay as-is
+# ════════════════════════════════════════════════════════════════
+
+# ── SECTION 1: Identity ──────────────────────────────────────── ← EDIT
+compound:
+  prefix:       "MyCompound"   # Short name, no spaces (used for all QE file prefixes)
+  pressure_GPa:  0.0           # 0 for ambient-pressure, e.g. 150 for high-pressure
+
+# ── SECTION 2: Crystal Structure ─────────────────────────────── ← EDIT
+structure:
+  # Option A — BCC (most high-pressure hydrides):
+  ibrav: 3
+  A:     3.00        # Conventional cube edge in Å — initial guess, vc-relax will refine.
+
+  # Option B — FCC:
+  # ibrav: 2
+  # A:    3.89
+
+  # Option C — Arbitrary cell (set ibrav: 0, comment out A):
+  # ibrav: 0
+  # cell_parameters_angstrom:
+  #   - [ax, ay, az]
+  #   - [bx, by, bz]
+  #   - [cx, cy, cz]
+
+  nat:  4            # Number of atoms per primitive cell
+  ntyp: 2            # Number of distinct element types
+
+  species:           # List elements (order matters: amass(1), amass(2), ...)
+    - {symbol: X,  mass: 0.00,   pseudo: X.pbe-xxx.UPF}
+    - {symbol: H,  mass: 1.00794, pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
+
+  positions:         # Atomic positions in crystal (fractional) coordinates
+    - [X, 0.0, 0.0, 0.0]
+    - [H, 0.5, 0.5, 0.5]
+    # ...
+
+# ── SECTION 3: Wannier Functions ─────────────────────────────── ← EDIT
+# Key question: how many WFs (nbndsub) and what projections?
+# Rule of thumb: nbndsub = (valence electrons + some conduction bands for metals)
+# For H-rich: count M d-orbitals (5) + H s (n_H) typically
+wannier:
+  nbndsub:     7              # Total number of Wannier functions
+  nbnd:        20             # Bands computed in NSCF (extra for disentanglement window)
+  bands_skipped: null         # e.g. "exclude_bands = 1-4" to skip deep core bands
+                              # Use null if no bands need skipping
+  projections:
+    - "X:d"                  # Atomic orbital projections for initial guess
+    - "H:s"                  # Must match nbndsub in total
+
+  # Disentanglement windows (eV, relative to Fermi energy or absolute)
+  # Outer window must contain ≥ nbndsub bands at EVERY k-point
+  # Frozen window must have ≤ nbndsub bands at every k-point
+  # Tip: run a quick band structure plot to set these
+  dis_win_min:  -10.0
+  dis_win_max:   30.0
+  dis_froz_min: -10.0
+  dis_froz_max:   5.0
+
+# ── SECTION 4: Eliashberg Parameters ─────────────────────────── ← EDIT
+eliashberg:
+  muc:            0.10        # Coulomb pseudopotential μ*
+                              # 0.10 for hydrides, 0.13 for conventional metals
+  temperatures_K: [50, 100, 150, 200, 250, 300]   # Scan range — bracket expected Tc
+
+# ── SECTION 5: DFT Settings ──────────────────────────────────── (rarely change)
+dft:
+  ecutwfc:      80.0          # Ry. Use 60 for quick tests, 100+ for heavy elements
+  ecutrho:     800.0          # Ry. Usually 8-10× ecutwfc for USPP, 4× for NCPP
+  degauss:       0.02         # Ry. Methfessel-Paxton smearing width
+  scf_kgrid:   [8, 8, 8]     # SCF k-sampling (symmetry-reduced OK here)
+  coarse_kgrid: [4, 4, 4]    # ph.x q-grid AND EPW coarse grid — MUST MATCH both
+
+# ── SECTION 6: EPW Settings ──────────────────────────────────── (rarely change)
+epw:
+  fine_kgrid:  [10, 10, 10]  # Fine grid for Wannier interpolation
+                              # 10³=1000 pts for quick PoC, 20³=8000 for production
+  fsthick:     0.5            # eV — energy window around Fermi for e-ph matrix elements
+  wscut:       1.5            # eV — Matsubara cutoff. Use ~10× max phonon frequency:
+                              # conventional metals: 0.3 eV, hydrides: 2-4 eV
+
+# ── SECTION 7: System Paths ──────────────────────────────────── ← EDIT for new machines
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+  # For relativistic PPs (Ir, Pt, Os, Rh, Ru):
+  # pseudo_dir: "/Users/vdark/work/quantum/pslibrary/rel-pbe/PSEUDOPOTENTIALS/"

@@ -1,0 +1,55 @@
+# QE binary output (large binary files)
+runs/
+*.wfc*
+*.save/
+*.epmatwp
+*.epb*
+*.ephmat/
+*.chk
+*.mmn
+*.amn
+*.eig
+*.nnkp
+*.ukk
+*.bvec
+*.kgmap
+*.kmap
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+qe-py/
+
+# QE binaries and source
+qe-7.4.1/
+pslibrary/
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary / crash files
+CRASH
+fort.*
+
+# Large output files
+*.a2f
+*.a2f_proj
+*.lambda_FS
+*.lambda_k_pairs
+*.phdos
+*.phdos_proj
+*.dos
+*.fc
+*.freq
+*.dyn[0-9]*
+imag_iso_*
+pade_iso_*
+qdos_*
+lambda.phself.*
+linewidth.phself.*

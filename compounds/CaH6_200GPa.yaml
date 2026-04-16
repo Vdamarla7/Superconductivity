@@ -1,0 +1,77 @@
+# ════════════════════════════════════════════════════════════════
+#  Compound: CaH₆ (Im-3m) at 200 GPa
+#  Reference: Wang et al., Phys. Rev. B 86, 014110 (2012)
+#  Expected: Allen-Dynes Tc ≈ 220–235 K
+#
+#  Why 200 GPa: 150 GPa shows 100 imaginary modes in harmonic PBE
+#  (dynamically unstable, same issue as H3S@150GPa).
+#  200 GPa stabilizes the structure.
+#
+#  Structure: ibrav=0 required — H at 12e Wyckoff (0.25/0.75 coords)
+#  gives only 4 sym ops with ibrav=3. ibrav=0 gives 48.
+#
+#  Wannier: Ca has 4 deep core bands (3s at -35 eV, 3p at -17 eV)
+#  that must be excluded. bands_skipped = 'exclude_bands = 1-4'
+#  leaves 8 valence + Ca-d + H-s bands for Wannierization.
+# ════════════════════════════════════════════════════════════════
+
+skip_vcrelax: true
+
+compound:
+  prefix:       "CaH6_200"
+  pressure_GPa:  200.0
+
+structure:
+  ibrav: 0
+  # BCC primitive vectors for A=3.64 Å (literature at 200 GPa)
+  cell_parameters_angstrom:
+    - [-1.820000,  1.820000,  1.820000]
+    - [ 1.820000, -1.820000,  1.820000]
+    - [ 1.820000,  1.820000, -1.820000]
+  nat:  7
+  ntyp: 2
+  species:
+    - {symbol: Ca, mass: 40.078,   pseudo: Ca.pbe-spn-rrkjus_psl.1.0.0.UPF}
+    - {symbol: H,  mass: 1.00794,  pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
+  positions:
+    - [Ca, 0.000, 0.000, 0.000]
+    - [H,  0.000, 0.250, 0.250]
+    - [H,  0.000, 0.750, 0.750]
+    - [H,  0.250, 0.000, 0.250]
+    - [H,  0.750, 0.000, 0.750]
+    - [H,  0.250, 0.250, 0.000]
+    - [H,  0.750, 0.750, 0.000]
+
+wannier:
+  nbndsub:     11             # Ca:d (5) + 6×H:s (6) = 11
+  nbnd:        30
+  bands_skipped: "exclude_bands = 1-4"   # Ca 3s (-35 eV) + Ca 3p (-17 eV) core bands
+  projections:
+    - "Ca:d"
+    - "H:s"
+  # Windows relative to NSCF Ef (check nscf.out after running)
+  # At 200 GPa: Ef expected ~12-15 eV. Will update after SCF.
+  dis_win_min:  -2.0          # just below the valence band minimum (after excluding cores)
+  dis_win_max:  40.0
+  dis_froz_min: -2.0
+  dis_froz_max: 16.0          # to be confirmed from NSCF eigenvalues
+
+eliashberg:
+  muc:            0.10
+  temperatures_K: [5, 8, 12, 16, 19, 21]   # must stay below Allen-Dynes Tc=22.6 K (harmonic; real Tc needs SSCHA)
+
+dft:
+  ecutwfc:    80.0
+  ecutrho:   800.0
+  degauss:     0.02
+  scf_kgrid:  [8, 8, 8]
+  coarse_kgrid: [4, 4, 4]
+
+epw:
+  fine_kgrid:  [10, 10, 10]
+  fsthick:     1.0
+  wscut:       3.0
+
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"

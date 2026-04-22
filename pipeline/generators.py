@@ -192,9 +192,9 @@ Phonon calculation for {p['prefix']} at {p['pressure_GPa']} GPa
   nq1           = {q[0]}
   nq2           = {q[1]}
   nq3           = {q[2]}
-  tr2_ph        = 1.0d-14
-  alpha_mix(1)  = 0.3
-  nmix_ph       = 4
+  tr2_ph        = 1.0d-12
+  alpha_mix(1)  = 0.1
+  nmix_ph       = 8
 /
 """
 
@@ -251,7 +251,8 @@ def gen_nscf(cfg):
     cell_lines = _cell_section(cfg)
     cell_params = _cell_parameters_block(cfg)
 
-    n1, n2, n3 = d["coarse_kgrid"]
+    epw_kg = d.get("epw_coarse_kgrid", d["coarse_kgrid"])
+    n1, n2, n3 = epw_kg
     kpoints = gen_kpoints_crystal(n1, n2, n3)
 
     return f"""\
@@ -305,7 +306,8 @@ def gen_epw_pass1(cfg):
     w = cfg["wannier"]
     e = cfg["epw"]
 
-    nk = d["coarse_kgrid"]
+    nq = d["coarse_kgrid"]            # phonon q-grid — must match ph.x
+    nk = d.get("epw_coarse_kgrid", nq)  # Wannier k-grid — must be multiple of nq
     bands_skipped_line = ""
     if w.get("bands_skipped"):
         bands_skipped_line = f"  bands_skipped = '{w['bands_skipped']}'\n"
@@ -342,12 +344,12 @@ def gen_epw_pass1(cfg):
   fsthick       = {e['fsthick']}
 
   nk1 = {nk[0]}  nk2 = {nk[1]}  nk3 = {nk[2]}
-  nq1 = {nk[0]}  nq2 = {nk[1]}  nq3 = {nk[2]}
+  nq1 = {nq[0]}  nq2 = {nq[1]}  nq3 = {nq[2]}
   mp_mesh_k     = .false.
 
   ! Coarse fine grid for pass 1 — just need Wannierization done
   nkf1 = {nk[0]}  nkf2 = {nk[1]}  nkf3 = {nk[2]}
-  nqf1 = {nk[0]}  nqf2 = {nk[1]}  nqf3 = {nk[2]}
+  nqf1 = {nq[0]}  nqf2 = {nq[1]}  nqf3 = {nq[2]}
 
   dvscf_dir     = '../2_phonons/save'
   iverbosity    = 0
@@ -362,12 +364,16 @@ def gen_epw_pass1(cfg):
 def gen_epw_pass2(cfg):
     """
     Read .epmatwp from pass 1. Interpolate onto fine k/q grid.
-    Compute phonon self-energy and solve Eliashberg equations.
 
-    Critical flags (learned from debugging):
-      liso = .true.   → correct Eliashberg code path that reads ephmat
-      ephwrite = .true. → creates ephmat/ dir and writes freq/kqmap/eigenvalues/ephmat
-      a2f = .false.   → allows write_freq() to be called (gated by IF(.NOT.a2f))
+    Two modes, selected by epw.use_a2f in the compound YAML:
+
+    Default (use_a2f=false): full Eliashberg solver.
+      ephwrite=.true. + liso=.true. — correct path for H3X and simple metals.
+      a2f=.false. allows write_freq() to be called (gated by IF(.NOT.a2f)).
+
+    a2f mode (use_a2f=true): phonon self-energy → α²F → Allen-Dynes.
+      ephwrite=.false. avoids the egnv=0 crash for entangled d-band systems
+      where the frozen window cannot span the Fermi level (e.g. NbN).
     """
     p = cfg["compound"]
     d = cfg["dft"]
@@ -375,29 +381,26 @@ def gen_epw_pass2(cfg):
     e = cfg["epw"]
     el = cfg["eliashberg"]
 
-    nk = d["coarse_kgrid"]
+    nq = d["coarse_kgrid"]
+    nk = d.get("epw_coarse_kgrid", nq)
     nkf = e["fine_kgrid"]
-    temps_str = "  ".join(str(t) for t in el["temperatures_K"])
-    nstemp = len(el["temperatures_K"])
 
     bands_skipped_line = ""
     if w.get("bands_skipped"):
         bands_skipped_line = f"  bands_skipped = '{w['bands_skipped']}'\n"
 
-    return f"""\
+    common_header = f"""\
 &inputepw
   prefix        = '{p['prefix']}'
 {_amass_block(cfg)}
   outdir        = './tmp/'
 
-  ! Pass 2: read .epmatwp, fine grid interpolation + Eliashberg
   ep_coupling   = .true.
   elph          = .true.
   epbwrite      = .false.
   epbread       = .false.
   epwwrite      = .false.
   epwread       = .true.
-  ephwrite      = .true.
   kmaps         = .true.
 
   wannierize    = .false.
@@ -410,6 +413,36 @@ def gen_epw_pass2(cfg):
   dis_froz_min  = {w['dis_froz_min']}
   dis_froz_max  = {w['dis_froz_max']}
 
+  nk1 = {nk[0]}  nk2 = {nk[1]}  nk3 = {nk[2]}
+  nq1 = {nq[0]}  nq2 = {nq[1]}  nq3 = {nq[2]}
+  mp_mesh_k     = .false.
+
+  nkf1 = {nkf[0]}  nkf2 = {nkf[1]}  nkf3 = {nkf[2]}
+  nqf1 = {nkf[0]}  nqf2 = {nkf[1]}  nqf3 = {nkf[2]}
+
+  dvscf_dir     = '../2_phonons/save'
+  iverbosity    = 0
+"""
+
+    if e.get("use_a2f", False):
+        return common_header + f"""\
+  ! a2f mode: phonon self-energy → α²F → Allen-Dynes Tc (no Eliashberg solver)
+  ! ephwrite=.false. avoids egnv=0 for d-band systems with entangled bands at Ef
+  ephwrite      = .false.
+  phonselfen    = .true.
+  a2f           = .true.
+  eliashberg    = .false.
+  fsthick       = {e['fsthick']}
+  wscut         = {e['wscut']}
+  muc           = {el['muc']}
+/
+"""
+
+    temps_str = "  ".join(str(t) for t in el["temperatures_K"])
+    nstemp = len(el["temperatures_K"])
+    return common_header + f"""\
+  ! Eliashberg mode: full isotropic solver on fine grid
+  ephwrite      = .true.
   phonselfen    = .true.
   a2f           = .false.
   fsthick       = {e['fsthick']}
@@ -428,16 +461,6 @@ def gen_epw_pass2(cfg):
 
   nstemp        = {nstemp}
   temps         = {temps_str}
-
-  nk1 = {nk[0]}  nk2 = {nk[1]}  nk3 = {nk[2]}
-  nq1 = {nk[0]}  nq2 = {nk[1]}  nq3 = {nk[2]}
-  mp_mesh_k     = .false.
-
-  nkf1 = {nkf[0]}  nkf2 = {nkf[1]}  nkf3 = {nkf[2]}
-  nqf1 = {nkf[0]}  nqf2 = {nkf[1]}  nqf3 = {nkf[2]}
-
-  dvscf_dir     = '../2_phonons/save'
-  iverbosity    = 0
 /
 """
 

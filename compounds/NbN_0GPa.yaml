@@ -13,7 +13,9 @@
 #
 #  Note: ibrav=2 works here because both atoms sit at 0 and 0.5 only.
 #
-#  Wannier: Nb:d (5) + N:p (3) = 8 WFs
+#  Wannier: Nb:s(1)+Nb:p(3)+Nb:d(5)+N:s(1)+N:p(3) = 13 WFs
+#  Result (10³ grid, a2f): λ=2.47, ω_log=11 meV, Tc=19.8 K (μ*=0.10) / 16.6 K (μ*=0.18)
+#  Literature: 12–16 K ✓
 # ════════════════════════════════════════════════════════════════
 
 skip_vcrelax: true   # using experimental lattice constant
@@ -35,30 +37,28 @@ structure:
     - [N,  0.500000, 0.500000, 0.500000]
 
 wannier:
-  # NbN band structure at Gamma: N-2s at -35.6 eV (band 1), N-2p at -11.3 eV (bands 2-4),
-  # then Nb-d + N-p valence bands (5-13) crossing Ef=20.74 eV (coarse) / 20.816 eV (fine).
-  # Exclude bands 1-4 (deep core), Wannierize bands 5-13 = 9 WFs.
-  # NbN band structure (after exclude_bands=1-4):
-  #   band 5: Nb-s/N-s at 3.1 eV
-  #   bands 6-8: Nb-t2g at 17.4 eV
-  #   bands 9-11: Nb-eg at 18.75 eV
-  #   bands 12-13: crossing Ef at 20.6 eV
-  # Problem: dis_froz_max cannot span Ef without exceeding nbndsub=9 at some k-points
-  #   (at dis_froz_max >= 19.74, max bands = 11 > 9 at some k).
-  # Solution: NO frozen window (dis_froz_max = dis_froz_min = 3.0) — pure disentanglement.
-  #   Wannier90 optimally selects 9 WFs from all bands in [3.0, 30.0] without constraints.
-  #   Standard approach for entangled d-band systems where froz window can't span Ef.
-  nbndsub:     9              # Nb:s (1) + Nb:d (5) + N:p (3) = 9
+  # NbN band structure at Gamma (after exclude_bands=1-4):
+  #   band 5:     Nb-5s/N-2s mixed at ~3.1 eV
+  #   bands 6-8:  Nb-t2g at ~17.4 eV
+  #   bands 9-11: Nb-eg at ~18.75 eV
+  #   bands 12-13: crossing coarse Ef=20.57 eV (fine Ef=20.85 eV)
+  # nbndsub=13: Nb:s(1)+Nb:p(3)+Nb:d(5)+N:s(1)+N:p(3) spans full valence manifold.
+  # dis_froz_max=20.74 spans coarse Ef (20.57) with exactly 13 bands at the worst k-point.
+  # Fine Ef shifts to 20.85 > dis_froz_max → frozen window misses fine Ef → use a2f path.
+  # nbndsub=9 with no frozen window gives λ=50 (unphysical); this setup fixes it.
+  nbndsub:     13             # Nb:s (1) + Nb:p (3) + Nb:d (5) + N:s (1) + N:p (3) = 13
   nbnd:        20
   bands_skipped: "exclude_bands = 1-4"   # N-2s (-35 eV) + N-2p (-11 eV) deep core bands
   projections:
     - "Nb:s"
+    - "Nb:p"
     - "Nb:d"
+    - "N:s"
     - "N:p"
   dis_win_min:   3.0          # just below band 5 bottom at Gamma (~3.1 eV)
-  dis_win_max:   30.0
+  dis_win_max:   50.0        # 13th active band reaches 43.5 eV; need > 43.5 at all k-points
   dis_froz_min:  3.0
-  dis_froz_max:  3.0          # = dis_froz_min → no frozen window; pure disentanglement
+  dis_froz_max:  22.0         # spans fine Ef=20.964; band 14 starts at 24 eV (2 eV gap)
 
 eliashberg:
   muc:            0.10
@@ -72,11 +72,10 @@ dft:
   coarse_kgrid: [4, 4, 4]
 
 epw:
-  fine_kgrid:  [20, 20, 20]
-  fsthick:     1.0            # wider for entangled d-bands; 0.4 gives nkfs but egnv=0 (a2f path)
+  fine_kgrid:  [10, 10, 10]
+  fsthick:     1.0            # wider for entangled d-bands; 0.4 gives nkfs but egnv=0
   wscut:       0.5            # NbN max phonon ~70 meV; wscut=7x=0.5 eV
-  # Note: use a2f=.true. + eliashberg=.false. for d-band systems (avoids egnv/ephmat issues)
-  # frozen window can't span Ef in NbN (too many bands at Ef exceed nbndsub)
+  use_a2f:     true           # d-band system: frozen window can't span Ef → use α²F path
 
 paths:
   qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"

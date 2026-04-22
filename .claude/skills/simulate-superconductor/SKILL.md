@@ -214,7 +214,7 @@ python sscha_relax.py compounds/CaH6_200GPa.yaml --nconfigs 50 --niter 20 --temp
 | H3S      | 200 GPa  | 216 K  | ~200–220 K ✓ |
 | H3Se     | 150 GPa  | 97 K   | ~100–130 K ✓ |
 | CaH6     | 200 GPa  | 22.6 K (harmonic only — SSCHA required) | ~220–235 K |
-| NbN      | 0 GPa    | FAILED — requires nbndsub=13 for correct Wannierization (see NbN notes below) | ~12–16 K |
+| NbN      | 0 GPa    | IN PROGRESS (nbndsub=13 run) | ~12–16 K |
 
 ---
 
@@ -226,14 +226,14 @@ NbN (Fm-3m rock salt) is a prototype d-band superconductor. It is much harder to
 - Band 5: Nb-5s/N-s at ~3 eV
 - Bands 6-8: Nb-t2g at ~17 eV
 - Bands 9-11: Nb-eg at ~18.75 eV
-- Bands 12-13: crossing Ef at ~20.6 eV (coarse Ef=20.57, fine Ef=20.85 eV)
+- Bands 12-13: crossing Ef at ~20.7 eV (coarse Ef=20.74, fine Ef TBD)
 - Bands 14+: above 21 eV
 
 **The nbndsub=9 problem**: To get egnv written (needed for Eliashberg), dis_froz_max must be > Ef_fine=20.85 eV. But at dis_froz_max≥19.74, max bands=11 at some k-points (>9). So nbndsub=9 cannot have a frozen window spanning Ef.
 
 **With no frozen window (dis_froz_max=dis_froz_min=3.0)**: Wannier90 minimizes spread but distorts the Fermi-surface bands. a2F run gives λ=50 (completely unphysical; should be ~0.8-1.0). ω_log=1 meV (should be ~30-50 meV).
 
-**Correct setup for NbN**: nbndsub=13 with projections Nb:s(1)+Nb:p(3)+Nb:d(5)+N:s(1)+N:p(3)=13. Then dis_froz_max can be set to ~20.74 eV (where max bands = exactly 13 at worst k-point). This fully spans the Fermi-crossing manifold.
+**Correct setup for NbN**: nbndsub=13 with projections Nb:s(1)+Nb:p(3)+Nb:d(5)+N:s(1)+N:p(3)=13. dis_froz_max=20.74 eV sits essentially at the coarse Ef (20.7425 eV from 12×12×12 SCF), with exactly 13 bands at the worst k-point. Fine Ef shifts ~0.1 eV higher → frozen window just misses fine Ef → use a2f path, not Eliashberg.
 
 **For pipeline PoC on Mac**: NbN is not recommended. Choose H₃X compounds (clean s+p physics) or wait until AWS for d-band systems requiring larger WF subspaces.
 

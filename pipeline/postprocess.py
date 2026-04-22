@@ -104,13 +104,108 @@ def parse_imaginary_modes(ph_outfile):
 
 
 def parse_allen_dynes_tc(epw_outfile):
-    """Extract Allen-Dynes Tc and omega_log from EPW pass 2 output."""
+    """Extract Allen-Dynes Tc and omega_log from EPW pass 2 output.
+
+    Handles two EPW output formats:
+      Eliashberg path: 'Estimated Allen-Dynes Tc = X K'
+                       'Estimated w_log in Allen-Dynes Tc = X meV'
+      a2f path:        'Estimated Allen-Dynes Tc\\n  logavg = X  ...\\n  mu = 0.10 Tc = Y K'
+                       logavg is in Ry; convert to meV (1 Ry = 13605.7 meV)
+    """
     content = Path(epw_outfile).read_text()
-    tc_m = re.search(r'Estimated Allen-Dynes Tc\s*=\s*([\d.]+)\s*K', content)
-    wlog_m = re.search(r'Estimated w_log in Allen-Dynes Tc\s*=\s*([\d.]+)\s*meV', content)
-    tc  = float(tc_m.group(1))  if tc_m  else None
+    # Eliashberg path: single-line "Allen-Dynes Tc = X K"
+    tc_m = re.search(r'(?:Estimated )?Allen-Dynes Tc\s*=\s*([\d.]+)\s*K', content)
+    # a2f path: "mu =  0.10 Tc =  X K" (first mu* entry)
+    if not tc_m:
+        tc_m = re.search(r'mu\s*=\s*[\d.]+\s+Tc\s*=\s*([\d.]+)\s*K', content)
+    # omega_log: explicit meV line (Eliashberg path)
+    wlog_m = re.search(
+        r'(?:Estimated w_log in Allen-Dynes Tc|omega_log \(a2f\))\s*=\s*([\d.]+)\s*meV',
+        content)
+    # a2f path: logavg in Ry — convert to meV
+    if not wlog_m:
+        logavg_m = re.search(r'logavg\s*=\s*([\d.eE+-]+)', content)
+        if logavg_m:
+            wlog_ry = float(logavg_m.group(1))
+            wlog = wlog_ry * 13605.7  # Ry → meV
+            return float(tc_m.group(1)) if tc_m else None, wlog
+    tc   = float(tc_m.group(1))   if tc_m   else None
     wlog = float(wlog_m.group(1)) if wlog_m else None
     return tc, wlog
+
+
+def parse_lambda(epw_outfile):
+    """Extract e-ph coupling λ from EPW pass 2 output.
+
+    a2f path:        'l_a2f =  X'  (from logavg line)
+    Eliashberg path: 'Electron-phonon coupling strength =  X'
+    """
+    content = Path(epw_outfile).read_text()
+    m = re.search(r'l_a2f\s*=\s*([\d.eE+-]+)', content)
+    if m:
+        return float(m.group(1))
+    m = re.search(r'Electron-phonon coupling strength\s*=\s*([\d.eE+-]+)', content)
+    return float(m.group(1)) if m else None
+
+
+def scan_frozen_window(nscf_outfile, nbndsub, dis_win_min=None):
+    """Scan NSCF eigenvalues to find the highest dis_froz_max that keeps ≤ nbndsub
+    bands in the frozen window [dis_win_min, e_test] at every k-point.
+
+    dis_win_min: only count bands above this energy (matches the EPW window floor).
+                 If None, counts all bands below e_test (old behaviour — can overcount
+                 when deep semicore bands are in the NSCF but below the EPW window).
+
+    Returns (Ef, suggested_froz_max, gap_to_next_band) or (Ef, None, None) on failure.
+    Prints a summary table for the user.
+    """
+    content = Path(nscf_outfile).read_text()
+    Ef_m = re.search(r'the Fermi energy is\s+([\d.+-]+)\s+ev', content)
+    if not Ef_m:
+        return None, None, None
+    Ef = float(Ef_m.group(1))
+
+    blocks = re.findall(
+        r'bands \(ev\):\s*([\d\s.+-]+?)(?=\n\s*\n|\n\s*k =)',
+        content, re.DOTALL
+    )
+    if not blocks:
+        return Ef, None, None
+
+    def count_bands(block, e_test):
+        evals = map(float, block.split())
+        if dis_win_min is not None:
+            return sum(1 for e in evals if dis_win_min <= e < e_test)
+        return sum(1 for e in evals if e < e_test)
+
+    print(f"\n  Window scan (NSCF coarse grid, nbndsub={nbndsub}"
+          + (f", win_min={dis_win_min:.1f} eV" if dis_win_min is not None else "") + "):")
+    print(f"  {'dis_froz_max':>14}   max bands   status")
+    print(f"  {'─'*42}")
+
+    last_ok = None
+    for e_test in [Ef + x for x in [-1, 0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10]]:
+        max_n = max(count_bands(b, e_test) for b in blocks)
+        ok = max_n <= nbndsub
+        marker = "✓" if ok else "✗ EXCEEDS"
+        print(f"  {e_test:>14.3f} eV   {max_n:>9}   {marker}")
+        if ok:
+            last_ok = e_test
+
+    gap = None
+    if last_ok is not None:
+        for e_test in [last_ok + x for x in [0.5, 1, 2, 3, 5, 10]]:
+            max_n = max(count_bands(b, e_test) for b in blocks)
+            if max_n > nbndsub:
+                gap = e_test - last_ok
+                break
+
+    suggested = last_ok - 0.5 if last_ok else None
+    print(f"\n  Coarse Ef  = {Ef:.3f} eV")
+    if suggested:
+        gap_str = f"  (gap to band {nbndsub+1}: ~{gap:.1f} eV)" if gap else ""
+        print(f"  Suggested dis_froz_max = {suggested:.2f} eV{gap_str}")
+    return Ef, suggested, gap
 
 
 def parse_nqirr(ph_outfile):

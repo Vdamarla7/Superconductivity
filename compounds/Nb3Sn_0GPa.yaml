@@ -1,0 +1,100 @@
+# ════════════════════════════════════════════════════════════════
+#  Compound: Nb3Sn (Pm-3n, A15) at ambient pressure
+#  Reference: Exp. Tc ≈ 18.3 K; DFT EPW Tc ≈ 16–20 K expected
+#
+#  Why Nb3Sn: technologically important A15 superconductor (MRI/fusion
+#  magnets), cubic Pm-3n (safe on Mac), harmonically stable at 0 GPa.
+#  Completely different physics from NbN (Nb chains in A15 vs rock salt).
+#
+#  Structure: Pm-3n (#223), a=5.289 Å (experimental)
+#    Sn at 2a: (0,0,0), (1/2,1/2,1/2)
+#    Nb at 6c: (1/4,0,1/2), (3/4,0,1/2), (1/2,1/4,0),
+#              (1/2,3/4,0), (0,1/2,1/4), (0,1/2,3/4)
+#  Pm-3n has 48 sym ops. ibrav=0 required: 6c Wyckoff has 0.25/0.75 coords.
+#
+#  Pseudopotentials:
+#    Nb.pbe-spn-rrkjus: 13 val e⁻ (semicore 4s+4p, valence 4d+5s)
+#    Sn.pbe-dn-rrkjus:  14 val e⁻ (semicore 4d, valence 5s+5p)
+#    Total val e⁻: 6×13 + 2×14 = 106 → 53 filled bands
+#
+#  bands_skipped = 1-34 (deep core, not relevant for e-ph):
+#    Nb-4s ×6   → bands  1-6   (~-30 eV)
+#    Sn-4d ×2   → bands  7-16  (~-25 eV)
+#    Nb-4p ×6   → bands 17-34  (~-18 eV)
+#    Leaves 19 active filled bands (38 val e⁻) from band 35
+#
+#  Wannier: Nb:s(1)+Nb:d(5) per Nb × 6 = 36, Sn:s(1)+Sn:p(3) per Sn × 2 = 8
+#           → 44 WFs total
+#  NOTE: dis_froz_max MUST be verified/updated from NSCF window scan.
+#        The pipeline prints a table before EPW pass1. Check it and update
+#        dis_froz_max here, then rerun: python pipeline.py --reset-epw --start-from epw1
+# ════════════════════════════════════════════════════════════════
+
+skip_vcrelax: true   # using experimental lattice constant
+
+compound:
+  prefix:       "Nb3Sn"
+  pressure_GPa:  0.0
+
+structure:
+  ibrav: 0
+  nat:  8
+  ntyp: 2
+  cell_parameters_angstrom:
+    - [5.289000, 0.000000, 0.000000]
+    - [0.000000, 5.289000, 0.000000]
+    - [0.000000, 0.000000, 5.289000]
+  species:
+    - {symbol: Sn, mass: 118.710, pseudo: Sn.pbe-dn-rrkjus_psl.1.0.0.UPF}
+    - {symbol: Nb, mass:  92.906, pseudo: Nb.pbe-spn-rrkjus_psl.1.0.0.UPF}
+  positions:
+    - [Sn, 0.000000, 0.000000, 0.000000]
+    - [Sn, 0.500000, 0.500000, 0.500000]
+    - [Nb, 0.250000, 0.000000, 0.500000]
+    - [Nb, 0.750000, 0.000000, 0.500000]
+    - [Nb, 0.500000, 0.250000, 0.000000]
+    - [Nb, 0.500000, 0.750000, 0.000000]
+    - [Nb, 0.000000, 0.500000, 0.250000]
+    - [Nb, 0.000000, 0.500000, 0.750000]
+
+wannier:
+  # Active bands after excluding deep core (bands 1-34):
+  #   band 35:     Sn-5s pair (~-7 eV below Ef)
+  #   bands 36-53: Nb-d + Sn-p hybridised manifold crossing Ef
+  # 44 WFs = Nb:s+d (6/Nb × 6 Nb) + Sn:s+p (4/Sn × 2 Sn)
+  # dis_froz_max PLACEHOLDER = 15.0 eV — UPDATE from NSCF window scan.
+  # a2f path used: dense Nb-d manifold at Ef → same reasoning as NbN.
+  nbndsub:     44
+  nbnd:        90             # 34 (core) + 44 (in window) + 12 (buffer)
+  bands_skipped: "exclude_bands = 1-34"
+  projections:
+    - "Nb:s"
+    - "Nb:d"
+    - "Sn:s"
+    - "Sn:p"
+  dis_win_min:   0.0          # verify from NSCF: just below band 35 (Sn-5s bottom)
+  dis_win_max:   50.0
+  dis_froz_min:  0.0
+  dis_froz_max:  15.0         # PLACEHOLDER — update from NSCF eigenvalue scan
+
+eliashberg:
+  muc:            0.10
+  temperatures_K: [4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
+
+dft:
+  ecutwfc:    60.0
+  ecutrho:   480.0
+  degauss:    0.02
+  scf_kgrid:  [12, 12, 12]
+  coarse_kgrid: [2, 2, 2]        # phonon q-grid (ph.x)
+  epw_coarse_kgrid: [6, 6, 6]    # Wannier k-grid; must be multiple of coarse_kgrid
+
+epw:
+  fine_kgrid:  [10, 10, 10]
+  fsthick:     1.0
+  wscut:       0.3             # Nb3Sn max phonon ~40 meV; wscut=7×40meV≈0.3 eV
+  use_a2f:     true            # d-band: Nb-d manifold → α²F Allen-Dynes
+
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"

@@ -1,0 +1,75 @@
+# ════════════════════════════════════════════════════════════════
+#  Compound: PdH (Fm-3m, rock salt) at ambient pressure
+#  Reference: Exp. Tc ≈ 9 K; DFT EPW Tc ≈ 7–10 K
+#
+#  Why PdH: ambient pressure interstitial hydride — completely
+#  different physics from H3X (no H-H coupling, H:s hybridizes
+#  with Pd:d at the Fermi level) and from NbN (lighter d-metal,
+#  different band filling, famous inverse isotope effect).
+#
+#  Structure: rock salt ibrav=2 (FCC), a=4.09 Å (experimental)
+#  Pd at 1a (0,0,0); H at 1b (0.5,0.5,0.5) in primitive coords.
+#  Verified: spglib → Fm-3m, 48 sym ops.
+#
+#  Wannier: Pd:d (5) + H:s (1) = 6 WFs
+#  Windows: scan after NSCF — pipeline prints suggestions at epw1 step.
+#
+#  STATUS: BLOCKED — imaginary phonon modes at X-point in harmonic DFT.
+#  Same situation as CaH6: quantum anharmonic crystal, SSCHA required.
+#  Run sscha_relax.py to renormalize phonons before EPW.
+# ════════════════════════════════════════════════════════════════
+
+skip_vcrelax: true   # using experimental lattice constant
+
+compound:
+  prefix:       "PdH"
+  pressure_GPa:  0.0
+
+structure:
+  ibrav: 2
+  A: 4.09
+  nat:  2
+  ntyp: 2
+  species:
+    - {symbol: Pd, mass: 106.42,  pseudo: Pd.pbe-spn-rrkjus_psl.1.0.0.UPF}
+    - {symbol: H,  mass:   1.008, pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
+  positions:
+    - [Pd, 0.000000, 0.000000, 0.000000]
+    - [H,  0.500000, 0.500000, 0.500000]
+
+wannier:
+  # PdH band structure: Pd:d complex from ~Ef-5 to ~Ef+1 eV, H:s at ~Ef-8 eV.
+  # nbndsub=6: Pd:d (5) + H:s (1) spans the Fermi-crossing manifold.
+  # dis_froz_max: run pipeline through nscf, check printed window scan, then update.
+  nbndsub:     6              # Pd:d (5) + H:s (1) = 6 WFs; 11 electrons after skipping 4 core bands
+  nbnd:        16
+  bands_skipped: "exclude_bands = 1-4"   # Pd 4s (band 1, -66 eV) + Pd 4p (bands 2-4, -31 eV)
+                                          # removes 8 electrons → 11 left → 5.5 filled → Ef brackets ✓
+  projections:
+    - "Pd:d"
+    - "H:s"
+  dis_win_min:   0.0          # Pd 4s + 4p are at negative absolute energy → excluded by window
+  dis_win_max:   25.0         # covers H:s (8 eV) + Pd 4d (15-19 eV) + empty states
+  dis_froz_min:  0.0
+  dis_froz_max:  21.5         # 2.7 eV above coarse Ef (18.8), 1.3 eV below band 7 (23.3 eV)
+
+eliashberg:
+  muc:            0.10
+  temperatures_K: [2, 4, 6, 8, 10, 12, 14]
+
+dft:
+  ecutwfc:    60.0
+  ecutrho:   600.0
+  degauss:     0.02
+  scf_kgrid:  [12, 12, 12]
+  coarse_kgrid: [4, 4, 4]
+
+epw:
+  fine_kgrid:  [10, 10, 10]   # PoC; increase to [20,20,20] for production
+  fsthick:     1.0
+  wscut:       0.5             # PdH max phonon ~80 meV; wscut=6x≈0.5 eV
+  use_a2f:     true            # d-band system — use α²F Allen-Dynes path
+
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"

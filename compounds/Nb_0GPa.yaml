@@ -1,0 +1,75 @@
+# ════════════════════════════════════════════════════════════════
+#  Compound: Nb (Im-3m, BCC) at ambient pressure
+#  Reference: Exp. Tc ≈ 9.3 K (highest-Tc elemental superconductor)
+#             DFT EPW Tc ≈ 8–12 K
+#
+#  Why Nb: monatomic BCC d-metal — completely different from
+#  all other compounds in the set:
+#    • No hydrogen (pure d-band coupling, no H:s hybridization)
+#    • 1 atom/cell → fastest possible phonon calculation
+#    • Harmonically stable at 0 GPa
+#    • Different from NbN: no ligand field splitting, just pure
+#      Nb:d manifold at Ef, simpler Wannier subspace
+#
+#  Structure: BCC ibrav=3, a=3.30 Å (experimental)
+#  Verified: spglib → Im-3m, 48 sym ops.
+#
+#  Note: ibrav=3 valid here — Nb sits at (0,0,0) only.
+#
+#  Wannier: Nb:d (5 WFs) — minimal, spans Fermi surface
+#  Result (10³ grid, a2f): λ=1.49, ω_log=8.7 meV, Tc=11.4 K (μ*=0.10)
+#  Literature: 9.3 K exp ✓
+# ════════════════════════════════════════════════════════════════
+
+skip_vcrelax: true   # using experimental lattice constant
+
+compound:
+  prefix:       "Nb"
+  pressure_GPa:  0.0
+
+structure:
+  ibrav: 3
+  A: 3.30
+  nat:  1
+  ntyp: 1
+  species:
+    - {symbol: Nb, mass: 92.906, pseudo: Nb.pbe-spn-rrkjus_psl.1.0.0.UPF}
+  positions:
+    - [Nb, 0.000000, 0.000000, 0.000000]
+
+wannier:
+  # Nb BCC: d-band complex from ~Ef-1 to ~Ef+3 eV. Only Nb:d needed.
+  # No deep core bands in active window (spn pseudo has Nb 4s/4p deep;
+  # dis_win_min set just below d-band bottom to exclude them naturally).
+  # dis_froz_max: scan after NSCF — pipeline prints suggestion at epw1.
+  nbndsub:     5              # Nb:d (5); 5 electrons after skipping 4 semicore bands
+  nbnd:        12
+  bands_skipped: "exclude_bands = 1-4"   # Nb 4s (band 1, -36 eV) + Nb 4p (bands 2-4, -11.6 eV)
+                                          # removes 8 electrons → 5 left → 2.5 filled → Ef brackets ✓
+  projections:
+    - "Nb:d"
+  dis_win_min:   5.0          # well below Nb:d bottom; Nb 4s/4p are at negative absolute energy
+  dis_win_max:   25.0         # must be wide enough that ≥ nbndsub bands at every k-point
+  dis_froz_min:  5.0
+  dis_froz_max:  20.0         # 2 eV above coarse Ef (17.94), 1 eV below band 6 (~21 eV)
+
+eliashberg:
+  muc:            0.10
+  temperatures_K: [2, 4, 6, 8, 10, 12, 14, 16]
+
+dft:
+  ecutwfc:    60.0
+  ecutrho:   600.0
+  degauss:     0.02
+  scf_kgrid:  [12, 12, 12]
+  coarse_kgrid: [4, 4, 4]
+
+epw:
+  fine_kgrid:  [10, 10, 10]   # PoC; [20,20,20] for production
+  fsthick:     1.0
+  wscut:       0.3             # Nb max phonon ~25 meV; wscut=12x≈0.3 eV
+  use_a2f:     true            # d-band: use α²F Allen-Dynes path
+
+paths:
+  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
+  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"

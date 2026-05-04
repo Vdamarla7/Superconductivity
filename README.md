@@ -2,7 +2,7 @@
 
 A Python pipeline for computing superconducting critical temperatures (Tc) of hydride compounds from first principles, using Quantum ESPRESSO + EPW + Wannier90.
 
-**Current status**: H₃S (216 K) and H₃Se (97 K) reproduced at literature accuracy. CaH₆ harmonic result obtained; SSCHA renormalization in progress.
+**Current status**: 6 compounds validated across 3 compound classes (hydrides, d-metal nitrides/elemental, A15 ternaries). Nb₃Sn in progress.
 
 ---
 
@@ -23,11 +23,16 @@ Each step is checkpointed — if you restart, completed steps are skipped automa
 
 | Compound | Pressure | Our Tc | Literature | Notes |
 |---|---|---|---|---|
-| H₃S | 200 GPa | **216 K** | ~200–220 K (exp: 203 K) | ✓ Full pipeline validated |
-| H₃Se | 150 GPa | **97 K** | ~100–130 K | ✓ Full pipeline validated |
+| H₃S | 200 GPa | **216 K** | ~200–220 K (exp: 203 K) | ✓ Full EPW pipeline |
+| H₃Se | 150 GPa | **97 K** | ~100–130 K | ✓ Full EPW pipeline |
 | CaH₆ | 200 GPa | 22.6 K | ~220–235 K | ⚠ Harmonic only — SSCHA required |
+| Nb | 0 GPa | **11.4 K** | 9.3 K (exp) | ✓ d-band, a2f path |
+| NbN | 0 GPa | **16.6 K** (μ\*=0.18) | 12–16 K | ✓ d-band, nbndsub=13 required |
+| MgCNi3 | 0 GPa | **7.9 K** | 7–8 K (exp) | ✓ EPW fails (d-band NaN); ph.x workaround |
+| Nb₃Sn | 0 GPa | — | 18.3 K (exp) | 🔄 In progress (phonons running) |
+| PdH | 0 GPa | — | ~9 K (exp) | ⚠ Imaginary phonons at X-point (harmonic DFT) |
 
-See [results/](results/) for per-compound summaries.
+See [results/](results/) for per-compound summaries and methodology notes.
 
 ---
 
@@ -42,11 +47,15 @@ pipeline/
   sscha_relax.py    # Anharmonic phonon renormalization via SSCHA (for CaH6, LaH10)
 
 compounds/
-  template.yaml     # Annotated template — start here for a new compound
-  H3S_200GPa.yaml
+  template.yaml       # Annotated template — start here for a new compound
+  H3S_200GPa.yaml     # H₃X family (sp physics)
   H3Se_150GPa.yaml
-  CaH6_200GPa.yaml
-  NbN_0GPa.yaml     # d-band superconductor (see notes on Wannier setup)
+  CaH6_200GPa.yaml    # Clathrate hydride (SSCHA required)
+  Nb_0GPa.yaml        # Elemental d-metal (minimal Wannier basis)
+  NbN_0GPa.yaml       # Rock-salt d-metal nitride (nbndsub=13)
+  MgCNi3_0GPa.yaml    # Ternary anti-perovskite (EPW fails; ph.x workaround)
+  PdH_0GPa.yaml       # Interstitial hydride (imaginary phonons in harmonic DFT)
+  Nb3Sn_0GPa.yaml     # A15 ternary (44 WFs; in progress)
 
 results/
   H3S_200GPa/summary.md

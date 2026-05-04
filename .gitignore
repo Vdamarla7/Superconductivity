@@ -29,6 +29,9 @@ pslibrary/
 # macOS
 .DS_Store
 
+# Claude Code session state
+.claude/scheduled_tasks.lock
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb

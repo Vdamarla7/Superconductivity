@@ -134,7 +134,7 @@ def check_structure(cfg, report):
 
 def check_scf(cfg, scf_out, report):
     if not Path(scf_out).exists():
-        report.add("scf.converged", "skip", f"{scf_out} not found")
+        report.add("scf.converged", "skip", f"{Path(scf_out).name} not found")
         return
     ok = pp.job_done(scf_out) and pp.scf_converged(scf_out)
     report.add("scf.converged", "pass" if ok else "fail",
@@ -180,7 +180,7 @@ def check_scf(cfg, scf_out, report):
 
 def check_phonons(cfg, ph_out, report, imag_fail_cm1=20.0, asr_warn_cm1=30.0):
     if not Path(ph_out).exists():
-        report.add("phonons.stability", "skip", f"{ph_out} not found")
+        report.add("phonons.stability", "skip", f"{Path(ph_out).name} not found")
         return
     qpts = pp.parse_phonon_qpoints(ph_out)
     if not qpts:
@@ -219,7 +219,7 @@ def check_phonons(cfg, ph_out, report, imag_fail_cm1=20.0, asr_warn_cm1=30.0):
 
 def check_wannier(cfg, wout, report, spread_warn=10.0):
     if not Path(wout).exists():
-        report.add("wannier.spreads", "skip", f"{wout} not found")
+        report.add("wannier.spreads", "skip", f"{Path(wout).name} not found")
         return
     spreads, dis_ok = pp.parse_wannier_spreads(wout)
     report.add("wannier.disentanglement", "pass" if dis_ok else "warn",
@@ -251,7 +251,7 @@ def check_frozen_window(cfg, nscf_out, report):
 
 def check_epw(cfg, epw_out, a2f_file, report):
     if not Path(epw_out).exists() or not pp.job_done(epw_out):
-        report.add("epw.completed", "skip", f"{epw_out} missing or unfinished")
+        report.add("epw.completed", "skip", f"{Path(epw_out).name} missing or unfinished")
         return
     report.add("epw.completed", "pass", "EPW pass 2 finished")
     if "NaN" in Path(epw_out).read_text():

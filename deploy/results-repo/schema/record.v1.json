@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "scflow run record, schema v1",
+  "type": "object",
+  "required": ["schema_version", "run", "results", "checks", "artifacts", "confidence", "submission"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run": {
+      "type": "object",
+      "required": ["id", "prefix", "formula", "pressure_gpa", "structure_hash", "method_hash", "tc_path",
+                   "fine_k", "muc", "scflow_version", "worst_check", "config"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[0-9a-f-]{36}$"},
+        "formula": {"type": "string", "pattern": "^[A-Za-z0-9]+$"},
+        "pressure_gpa": {"type": "number", "minimum": 0},
+        "muc": {"type": "number", "minimum": 0, "maximum": 1},
+        "worst_check": {"enum": ["pass", "warn", "fail", "skip"]},
+        "config": {"type": "object", "not": {"required": ["paths"]}}
+      },
+      "not": {"anyOf": [{"required": ["host"]}, {"required": ["run_dir"]}]}
+    },
+    "results": {
+      "type": "object",
+      "properties": {
+        "lambda": {"type": ["number", "null"], "minimum": 0},
+        "tc_eliashberg_iso_k": {"type": ["number", "null"], "minimum": 0},
+        "tc_allen_dynes_k": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {"type": "object", "required": ["name", "status"],
+                "properties": {"status": {"enum": ["pass", "warn", "fail", "skip"]}}}
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {"type": "object", "required": ["path", "sha256"],
+                "properties": {"path": {"type": "string", "pattern": "^[^/]"},
+                               "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+    },
+    "confidence": {
+      "type": "object", "required": ["tier"],
+      "properties": {"tier": {"enum": ["invalid", "preliminary", "converged", "benchmark"]}}
+    },
+    "submission": {
+      "type": "object", "required": ["verified"],
+      "properties": {"verified": {"const": false}}
+    }
+  }
+}

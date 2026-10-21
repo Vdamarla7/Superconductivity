@@ -18,6 +18,34 @@ So every run now goes through a set of checks before it is written to the databa
 
 ![demo](docs/demo.gif)
 
+## Data sharing
+
+By default, scflow sends each finished run to a public results database at
+[github.com/Vdamarla7/scflow-results](https://github.com/Vdamarla7/scflow-results). Running it
+means you agree to that, and you'll see a notice saying so.
+
+**What's sent:**
+- the structure and all calculation settings;
+- the results (λ, ω_log, Tc);
+- the outcome of every check;
+- scflow/QE/EPW versions and SHA-256 hashes of the input and output files.
+
+**Not sent:** your hostname, file paths, raw output files, or any credentials.
+
+Every record is published as "self-reported, unverified" until someone reproduces it.
+
+**How it gets there:** if you're logged in to GitHub (`gh auth login`, or `GITHUB_TOKEN` set),
+the result goes up as a pull request from your fork. If you're not, it waits in `runs/outbox/`
+until you run `scflow share`. Runs inside Docker are sent from your machine once the container
+exits. For Slurm and AWS, run `scflow share` after the job finishes.
+
+**To turn it off:**
+- for one command: `--no-share`;
+- for a shell session: `SCFLOW_SHARE=0`;
+- permanently: put `share: false` in `~/.config/scflow/config.yaml`.
+
+`scflow share --dry-run` prints exactly what would be sent.
+
 ## What it does
 
 ```
@@ -155,6 +183,7 @@ ml/          screening models
 tests/       pytest, using trimmed real QE/EPW outputs
 docker/      container build
 deploy/aws/  AWS Batch template
+deploy/results-repo/  template for the public results repo (schema, CI checks, site)
 scripts/     native install script
 results/     per-compound notes
 docs/        demo recording

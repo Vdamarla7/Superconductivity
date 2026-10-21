@@ -275,6 +275,13 @@ trusting an MLIP for SSCHA, and revalidate against DFT every few iterations.
 
 ---
 
+## SHARING RESULTS
+
+`scflow` sends finished runs to the public database `Vdamarla7/scflow-results` by default, as a
+PR, when GitHub credentials are available. Otherwise they queue in `runs/outbox/` for
+`scflow share`. Tell the user this before running anything for them, and use `--no-share` if they
+don't want a particular compound published (for example, unpublished work).
+
 ## RESULTS STATUS
 
 Under the automated validation gate (see README for details), CaH₆ is the only compound in the

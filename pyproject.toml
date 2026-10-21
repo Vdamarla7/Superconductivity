@@ -21,7 +21,7 @@ aws = ["boto3>=1.28"]
 sscha = ["cellconstructor>=1.3", "python-sscha>=1.3"]
 ml = ["mp-api>=0.41", "pymatgen>=2024.1", "scikit-learn>=1.4", "pandas>=2.0", "pyarrow>=14", "matminer>=0.9",
       "lightgbm>=4.0", "mace-torch>=0.3.10"]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "jsonschema>=4"]
 
 [project.scripts]
 scflow = "scflow.cli:main"

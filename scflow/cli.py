@@ -1,4 +1,4 @@
-"""scflow command line: run / check / validate / submit / db / doctor."""
+"""scflow command line: run / check / validate / submit / share / db / doctor."""
 
 import argparse
 import json
@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
-from . import backends, db
+from . import backends, db, share
 from .config import ConfigError, default_outdir, load_config
 from .executors import LocalExecutor, StepFailed
 from .validation import Report, check_structure, format_report, validate
@@ -39,6 +39,8 @@ def cmd_check(args):
 
 def cmd_run(args):
     cfg = _load(args)
+    if share.share_enabled(args.no_share) and not args.dry_run:
+        share.print_notice()
     pre = Report()
     check_structure(cfg, pre)
     print("\n  Pre-flight structure checks")
@@ -81,6 +83,8 @@ def _validate_and_record(cfg, run_dir, args):
     record_path = Path(args.db).parent / f"{cfg['compound']['prefix']}-{run_id[:8]}.record.json"
     record_path.write_text(json.dumps(db.export_record(con, run_id), indent=2, default=str))
     print(f"\n  Recorded run {run_id[:8]} in {args.db}  →  confidence: {tier.upper()} ({why})")
+    share.share_record(db.export_record(con, run_id), Path(args.db).parent,
+                       enabled=share.share_enabled(getattr(args, "no_share", False)))
     return 1 if report.worst == "fail" else 0
 
 
@@ -100,16 +104,25 @@ def cmd_validate(args):
 def cmd_submit(args):
     cfg = _load(args, need_paths=False)
     prefix = cfg["compound"]["prefix"]
+    sharing = share.share_enabled(args.no_share)
+    if sharing and not args.dry_run:
+        share.print_notice()
+    passthrough = (["--reset-epw"] if args.reset_epw else []) + ([] if sharing else ["--no-share"])
     if args.backend == "docker":
-        extra = ["--reset-epw"] if args.reset_epw else []
         result = backends.docker(args.config, prefix, args.runs_dir, image=args.image, nproc=args.nproc,
-                                 start_from=args.start_from, stop_after=args.stop_after, extra=extra,
+                                 start_from=args.start_from, stop_after=args.stop_after, extra=passthrough,
                                  dry_run=args.dry_run)
+        # The container has no GitHub credentials; send what it queued from here.
+        if sharing and not args.dry_run and share.pending(args.runs_dir):
+            try:
+                print(f"  Shared with the public results database: {share.send(share.pending(args.runs_dir))}")
+            except share.ShareError as e:
+                print(f"  Result queued in {share.outbox_dir(args.runs_dir)} ({e}). Send it with `scflow share`.")
     elif args.backend == "slurm":
         result = backends.slurm(args.config, prefix, args.runs_dir, nproc=args.nproc or cfg["parallel"]["nproc"],
                                 time=args.time, partition=args.partition, account=args.account, image=args.image,
                                 native=args.native, start_from=args.start_from, stop_after=args.stop_after,
-                                extra=["--reset-epw"] if args.reset_epw else [], dry_run=args.dry_run)
+                                extra=passthrough, dry_run=args.dry_run)
     else:
         if not (args.bucket and args.job_queue and args.job_definition):
             print("aws-batch needs --bucket, --job-queue and --job-definition (see deploy/aws/README.md)")
@@ -120,7 +133,45 @@ def cmd_submit(args):
     if isinstance(result, int):
         return result
     print(json.dumps(result, indent=2) if isinstance(result, dict) else result)
+    if sharing and args.backend != "docker" and not args.dry_run:
+        print(f"  When the job finishes, send its result with `scflow share --runs-dir {args.runs_dir}`.")
     return 0
+
+
+def cmd_share(args):
+    subs = [json.loads(f.read_text()) for f in share.pending(args.runs_dir)]
+    if args.run:
+        con = db.connect(args.db)
+        for prefix in args.run:
+            rows = con.execute("SELECT id FROM runs WHERE id LIKE ?", (prefix + "%",)).fetchall()
+            if len(rows) != 1:
+                print(f"  ✗ run id '{prefix}' matches {len(rows)} runs in {args.db}")
+                return 1
+            subs.append(share.make_submission(db.export_record(con, rows[0][0])))
+    if args.all:
+        queued = {s["run"]["id"] for s in subs}
+        sent_dir = share.outbox_dir(args.runs_dir) / "sent"
+        con = db.connect(args.db)
+        for (rid,) in con.execute("SELECT id FROM runs"):
+            if rid not in queued and not (sent_dir / f"{rid}.json").exists():
+                subs.append(share.make_submission(db.export_record(con, rid)))
+    if not subs:
+        print(f"  nothing queued in {share.outbox_dir(args.runs_dir)}")
+        return 0
+    if args.list or args.dry_run:
+        for sub in subs:
+            print(f"  {sub['run']['id'][:8]}  {sub['run']['formula']:<10} {sub['run']['pressure_gpa']:>6g} GPa  "
+                  f"tier {sub['confidence']['tier']:<12} → {share.repo_path(sub)}")
+            if args.dry_run:
+                print(json.dumps(sub, indent=2))
+        return 0
+    files = [share.write_outbox(sub, args.runs_dir) for sub in subs]
+    try:
+        print(f"  Opened pull request: {share.send(files)}")
+        return 0
+    except share.ShareError as e:
+        print(f"  ✗ {e}")
+        return 1
 
 
 def cmd_db(args):
@@ -217,6 +268,7 @@ def build_parser():
     r.add_argument("--force", action="store_true", help="run even if a pre-flight structure check fails")
     r.add_argument("--db", default=DEFAULT_DB)
     r.add_argument("--no-db", action="store_true")
+    r.add_argument("--no-share", action="store_true", help="do not send this run to the public results database")
     r.add_argument("--backend-label", default="local", help=argparse.SUPPRESS)
     r.add_argument("--s3-prefix", help=argparse.SUPPRESS)
     paths(r)
@@ -232,6 +284,7 @@ def build_parser():
     v.add_argument("--record", action="store_true", help="also record into the database")
     v.add_argument("--json", action="store_true")
     v.add_argument("--db", default=DEFAULT_DB)
+    v.add_argument("--no-share", action="store_true", help="with --record: do not send to the results database")
     v.add_argument("--backend-label", default="local", help=argparse.SUPPRESS)
     v.set_defaults(func=cmd_validate)
 
@@ -244,6 +297,7 @@ def build_parser():
     s.add_argument("--start-from", choices=STEPS)
     s.add_argument("--stop-after", choices=STEPS)
     s.add_argument("--reset-epw", action="store_true")
+    s.add_argument("--no-share", action="store_true", help="do not send results to the public results database")
     s.add_argument("--dry-run", action="store_true", help="print/write what would be submitted")
     s.add_argument("--time", default="24:00:00", help="slurm wall time")
     s.add_argument("--partition")
@@ -264,6 +318,15 @@ def build_parser():
     exp = dsub.add_parser("export")
     exp.add_argument("--out", default="records")
     d.set_defaults(func=cmd_db)
+
+    sh = sub.add_parser("share", help="send queued results to the public results database")
+    sh.add_argument("--runs-dir", default=str(Path(DEFAULT_DB).parent))
+    sh.add_argument("--db", default=DEFAULT_DB)
+    sh.add_argument("--list", action="store_true", help="show what is queued")
+    sh.add_argument("--dry-run", action="store_true", help="print exactly what would be sent")
+    sh.add_argument("--all", action="store_true", help="also queue every run already in the local database")
+    sh.add_argument("--run", nargs="+", metavar="ID", help="queue specific runs from the local database (id prefix)")
+    sh.set_defaults(func=cmd_share)
 
     doc = sub.add_parser("doctor", help="check that this machine can run scflow")
     doc.add_argument("config", nargs="?")

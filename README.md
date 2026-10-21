@@ -1,191 +1,177 @@
-# Hydride Superconductor Pipeline
+# scflow
 
-A Python pipeline for computing superconducting critical temperatures (Tc) of hydride compounds from first principles, using Quantum ESPRESSO + EPW + Wannier90.
+Computes superconducting Tc from a crystal structure using Quantum ESPRESSO and EPW,
+and checks the result before recording it.
 
-**Current status**: 6 compounds validated across 3 compound classes (hydrides, d-metal nitrides/elemental, A15 ternaries). Nb₃Sn in progress.
+I started this as a set of scripts for high-pressure hydrides. It grew into a small
+package because I kept running into results that looked fine and turned out to be wrong.
+The main ones:
 
----
+- The CaH6 input had hydrogen on the wrong Wyckoff site (12e instead of 12d). Symmetry
+  checks passed, because both sites give Im-3m with 48 operations. But H sat 0.91 Å from Ca,
+  the DFT pressure was 427 GPa instead of 200, and every phonon at Gamma was imaginary. I spent
+  a while treating that as an anharmonicity problem before finding the real cause.
+- vc-relax ran but its output was never used, so later steps ran at the input lattice.
+- One "agreement with experiment" only worked because mu* had been set to 0.18.
 
-## What this does
+So every run now goes through a set of checks before it is written to the database.
 
-Given a crystal structure and pressure, the pipeline runs:
+![demo](docs/demo.gif)
 
-```
-pw.x (vc-relax) → pw.x (SCF) → ph.x (phonons) → q2r + matdyn
-    → pw.x (NSCF) → epw.x (Wannierize) → epw.x (Eliashberg Tc)
-```
-
-Each step is checkpointed — if you restart, completed steps are skipped automatically.
-
----
-
-## Validated results
-
-| Compound | Pressure | Our Tc | Literature | Notes |
-|---|---|---|---|---|
-| H₃S | 200 GPa | **216 K** | ~200–220 K (exp: 203 K) | ✓ Full EPW pipeline |
-| H₃Se | 150 GPa | **97 K** | ~100–130 K | ✓ Full EPW pipeline |
-| CaH₆ | 200 GPa | 22.6 K | ~220–235 K | ⚠ Harmonic only — SSCHA required |
-| Nb | 0 GPa | **11.4 K** | 9.3 K (exp) | ✓ d-band, a2f path |
-| NbN | 0 GPa | **16.6 K** (μ\*=0.18) | 12–16 K | ✓ d-band, nbndsub=13 required |
-| MgCNi3 | 0 GPa | **7.9 K** | 7–8 K (exp) | ✓ EPW fails (d-band NaN); ph.x workaround |
-| Nb₃Sn | 0 GPa | — | 18.3 K (exp) | 🔄 In progress (phonons running) |
-| PdH | 0 GPa | — | ~9 K (exp) | ⚠ Imaginary phonons at X-point (harmonic DFT) |
-
-See [results/](results/) for per-compound summaries and methodology notes.
-
----
-
-## Repository layout
+## What it does
 
 ```
-pipeline/
-  pipeline.py       # Orchestrator — runs all 6 steps, checkpointing, arg parsing
-  generators.py     # QE/EPW input file generators (one function per step)
-  postprocess.py    # Output parsers: Fermi energy, Tc, sym ops, imaginary modes
-  kpoints.py        # K-point grid utilities (explicit crystal list for NSCF/EPW)
-  sscha_relax.py    # Anharmonic phonon renormalization via SSCHA (for CaH6, LaH10)
-
-compounds/
-  template.yaml       # Annotated template — start here for a new compound
-  H3S_200GPa.yaml     # H₃X family (sp physics)
-  H3Se_150GPa.yaml
-  CaH6_200GPa.yaml    # Clathrate hydride (SSCHA required)
-  Nb_0GPa.yaml        # Elemental d-metal (minimal Wannier basis)
-  NbN_0GPa.yaml       # Rock-salt d-metal nitride (nbndsub=13)
-  MgCNi3_0GPa.yaml    # Ternary anti-perovskite (EPW fails; ph.x workaround)
-  PdH_0GPa.yaml       # Interstitial hydride (imaginary phonons in harmonic DFT)
-  Nb3Sn_0GPa.yaml     # A15 ternary (44 WFs; in progress)
-
-results/
-  H3S_200GPa/summary.md
-  H3Se_150GPa/summary.md
-  CaH6_200GPa/summary.md   # includes SSCHA explanation
-
-.claude/skills/simulate-superconductor/SKILL.md
-  # Claude skill with full pipeline know-how — load with /simulate-superconductor
+pw.x vc-relax -> pw.x scf -> ph.x (DFPT) -> q2r/matdyn -> pw.x nscf
+  -> epw.x (Wannierize) -> epw.x (a2F / Eliashberg) -> checks -> sqlite DB
 ```
 
----
+Checks run at each stage:
 
-## Dependencies
+- Before anything runs: interatomic distances against covalent radii, space group from
+  spglib (optionally against `expected_spacegroup`), atomic masses. `scflow run` stops if
+  any of these fail.
+- After SCF: convergence, QE's symmetry count against spglib, DFT pressure against the
+  target pressure.
+- Phonons: imaginary modes on the DFPT grid, acoustic sum rule at Gamma.
+- Wannier:
+  - how close `dis_froz_max` sits to a band energy (an edge on a band gave me NaN couplings);
+  - disentanglement convergence;
+  - spreads.
+- EPW:
+  - NaNs, and imaginary modes on the fine grid;
+  - lambda and omega_log recomputed from the a2F file and compared with EPW;
+  - choice of phonon smearing;
+  - `fsthick` and `wscut` relative to the highest phonon frequency;
+  - mu* outside 0.08–0.16.
+- Tc: Allen-Dynes, Allen-Dynes with the f1·f2 corrections, and a separate isotropic
+  Eliashberg solve from the a2F (Allen-Dynes runs low once lambda is above ~1.5).
 
-**External (not included):**
-- [Quantum ESPRESSO](https://www.quantum-espresso.org/) 7.x compiled with EPW and Wannier90
-- [pslibrary](https://github.com/dalcorso/pslibrary) pseudopotentials (PBE USPP)
+Each run in the database gets a tier, computed from the checks:
 
-**Python:**
-```bash
-pip install pyyaml
-# Optional for SSCHA: pip install python-sscha cellconstructor
-```
+- `invalid`: a check failed.
+- `preliminary`: no failures, but no convergence evidence yet.
+- `converged`: two runs that differ only in the fine grid agree on lambda within 10%.
+- `benchmark`: converged, and within 25% of a reference Tc at roughly the same pressure.
 
-Set paths in your compound YAML:
-```yaml
-paths:
-  qe_bin:     "/path/to/qe-7.x/bin"
-  pseudo_dir: "/path/to/pslibrary/pbe/PSEUDOPOTENTIALS/"
-```
+## Running it
 
----
-
-## Running
+The easiest way is the container. It builds QE 7.4.1, EPW, Wannier90 and the pslibrary
+PBE pseudopotentials from source, which takes about 5 minutes on 24 cores.
 
 ```bash
-# Run full pipeline for H3S at 200 GPa
-python pipeline/pipeline.py compounds/H3S_200GPa.yaml
+docker build -f docker/Dockerfile -t scflow:latest .
+pip install -e .
 
-# Resume from a specific step
-python pipeline/pipeline.py compounds/H3S_200GPa.yaml --start-from epw1
-
-# Check what inputs would be generated without running anything
-python pipeline/pipeline.py compounds/H3S_200GPa.yaml --dry-run
+scflow check compounds/Nb_0GPa.yaml
+scflow submit compounds/Nb_0GPa.yaml --backend docker --nproc 16
+scflow db list
 ```
 
-Output goes to `runs/<prefix>/` with subdirectories `1_vcrelax/`, `2_phonons/`, `3_epw/`.
+Output goes to `runs/<prefix>/` and the database is `runs/scflow.db`. Every finished run also
+writes a JSON record containing:
+- the config and code versions;
+- every check and all the Tc numbers;
+- SHA-256 hashes of the inputs and outputs.
 
----
+Other ways to run:
 
-## Adding a new compound
+- Native QE: set `SCFLOW_QE_BIN` and `SCFLOW_PSEUDO_DIR`, then `scflow run compounds/X.yaml`.
+  `scripts/setup_native.sh` builds everything on Ubuntu/WSL2.
+- Slurm: `scflow submit X.yaml --backend slurm --nproc 64 --partition ... --account ...`.
+  This writes and submits a job script that runs the container under Apptainer. Add
+  `--native` to use a QE install on the cluster.
+- AWS Batch: `scflow submit X.yaml --backend aws-batch ...`, with a CloudFormation template in
+  `deploy/aws/`. I haven't run this against a real account yet.
 
-1. Copy `compounds/template.yaml` → `compounds/MyCompound.yaml`
-2. Fill in structure, pseudopotentials, Wannier parameters, and paths
-3. Run `--dry-run` to check generated inputs
-4. Verify sym ops after SCF: `grep "Sym. Ops." runs/<prefix>/2_phonons/scf.out` (expect 48 for Im-3m)
-5. Compute correct `dis_froz_max` from NSCF eigenvalues before committing to EPW
+`scflow doctor compounds/X.yaml` checks that a machine has everything it needs. Useful flags
+for `run`:
+- `--start-from` / `--stop-after STEP`: run part of the workflow.
+- `--reset-epw`: needed after changing Wannier settings.
+- `--dry-run`: write the inputs only.
 
-The template YAML has inline comments for every parameter. See also the [Claude skill](.claude/skills/simulate-superconductor/SKILL.md) for detailed Wannier window rules, common error fixes, and compound-specific guidance.
+## Adding a compound
 
----
+1. Copy `compounds/template.yaml` and fill it in. Add `expected_spacegroup` and a `reference:`
+   block if you have one.
+2. `scflow check compounds/X.yaml`
+3. `scflow run compounds/X.yaml --stop-after scf`, then `scflow validate compounds/X.yaml`.
+   Look at the pressure and symmetry before spending hours on phonons.
+4. After the NSCF, set `dis_froz_max` from the window scan it prints. Then
+   `scflow run X.yaml --reset-epw --start-from epw1`.
+5. Rerun with a denser `fine_kgrid` / `fine_qgrid` until lambda stops moving.
 
-## Key design decisions
+The notes in `.claude/skills/simulate-superconductor/SKILL.md` cover Wannier windows, semicore
+bands and the errors I've hit so far.
 
-**ibrav=0 for everything except simple H₃X**  
-`ibrav=3` only works when all atomic positions use 0 and 0.5 fractional coordinates. CaH₆ has H at ±0.25 — using ibrav=3 gives 4 sym ops instead of 48, producing wrong phonons and garbage Tc. Use ibrav=0 + explicit CELL_PARAMETERS for all other structures; QE does full symmetry detection from coordinates.
+## Current results
 
-**Explicit K_POINTS crystal for NSCF**  
-EPW requires the full N³ k-grid, not the symmetry-reduced set. `K_POINTS {automatic}` causes "inconsistent k-grids" in Wannierization. `kpoints.py` generates the full explicit list.
+| Compound | Tier | Notes |
+|---|---|---|
+| CaH6, 200 GPa | converged | 12d structure, a = 3.398 Å, stable on the 4×4×4 q-grid without SSCHA. lambda = 1.96, omega_log = 110 meV, Tc = 239 K (Eliashberg) / 181 K (Allen-Dynes), mu* = 0.10, harmonic. Fine grids k24/q12 and k32/q16 agree to 7% at 0.1 eV electron smearing. Experiment is 215 K at 172 GPa. |
+| Nb, 0 GPa | preliminary | lambda = 1.70, Tc = 14.6 K (Eliashberg) vs 9.25 K measured. Single 10³ fine grid. Disentanglement not converged. |
+| NbN, 0 GPa | invalid | −320 cm⁻¹ mode at X. |
+| H3S, H3Se, MgCNi3 | need re-running | old outputs not kept, or run before the vc-relax fix |
+| PdH, 0 GPa | needs SSCHA | real anharmonic instability at X |
+| Nb3Sn | not run | |
 
-**Two-pass EPW**  
-Pass 1 (Wannierize) writes `.epmatwp` — the e-ph matrix in the Wannier basis (~64–500 MB). Pass 2 reads it and does fine-grid interpolation + Eliashberg. If you change Wannier windows between passes, delete `.epmatwp` and rerun pass 1.
+Older notes for each compound are in `results/`.
 
-**Pre-create `tmp/{prefix}.ephmat/`**  
-EPW's `write_freq()` opens a file in this directory before creating it. The pipeline pre-creates the directory; for manual runs do `mkdir -p runs/<prefix>/3_epw/tmp/<prefix>.ephmat/`.
+CaH6 caveats:
+- The convergence evidence is only two grid points.
+- The Wannier coarse grid is 4³. An 8³ k-grid on the 4³ q-grid gave NaN couplings in EPW 5.9,
+  and I haven't tracked down why.
 
----
+## ML screening
 
-## CaH₆ and SSCHA
+`ml/` has quick models for deciding what is worth a full calculation:
+- a superconductor classifier and rough Tc estimate trained on 3DSC (SuperCon matched to
+  Materials Project structures);
+- a hull-distance model trained on Materials Project;
+- a MACE-MP-0 script that relaxes a structure, computes phonons and builds a convex hull.
 
-CaH₆ (and LaH₁₀, YH₆) are quantum anharmonic crystals: their H-cage phonons have imaginary harmonic frequencies at all pressures in PBE. This is real physics — nuclear quantum effects stabilize them. The harmonic EPW result (Tc≈23 K) is unphysical. SSCHA renormalizes the phonon spectrum and recovers Tc≈220 K.
+Results and limitations are in `ml/README.md`. The short version: the classifier is useful
+for ranking, and the Tc estimate is rough. The training data contain almost no hydrides, so
+none of this applies to high-pressure hydrides.
 
-```bash
-# Run SSCHA on CaH6 (requires python-sscha + cellconstructor)
-python pipeline/sscha_relax.py compounds/CaH6_200GPa.yaml \
-    --nconfigs 50 --niter 20 --temp 300
+## Notes
 
-# Then copy renormalized dyn files and rerun from phonons step
-python pipeline/pipeline.py compounds/CaH6_200GPa.yaml --start-from nscf
+- Use `ibrav=0` unless every coordinate is 0 or 1/2. Otherwise QE finds fewer symmetry
+  operations.
+- vc-relax runs unless `skip_vcrelax: true`. The relaxed structure is saved to
+  `runs/<prefix>/relaxed_structure.yaml` and used for every later step.
+- The NSCF uses an explicit `K_POINTS {crystal}` list, because EPW needs the full grid.
+- Completion is judged from the output file, not the exit code. EPW sometimes exits
+  non-zero after finishing because of floating-point exception reporting.
+- A step whose input changed is rerun or refused, never silently reused.
+- QE 7.4.1 `ph.x` segfaults on hexagonal structures on Apple Silicon. Use Linux for those.
+
+## Layout
+
 ```
-
-Runtime estimate on Mac: ~17 hours (50 configs × 10 iters, 448-atom supercell).  
-Use AWS for production runs.
-
----
-
-## Platform notes
-
-**Apple Silicon (M-series Mac):**  
-QE 7.4.1 ph.x segfaults for hexagonal space groups (P6/mmm, P6₃/mmc) on ARM64. All cubic structures (Im-3m, Fm-3m, F-43m) work fine. Affected: MgB₂ and all hexagonal compounds. Use Linux/AWS for hexagonal.
-
----
-
-## Phase 2: novel compound search (planned, AWS)
-
-The goal is to find new ternary hydrides that are:
-- Superconducting with Tc > 20 K
-- Dynamically stable at ambient pressure (no imaginary phonons at 0 GPa)
-- Synthesizable: metastable after decompression from 20–50 GPa
-
-**Target chemical space:** A₂MH₆ / A₃MH₆ families where M ∈ {Ir, Rh, Os, Ru, Pt, Pd} and A ∈ {Mg, Ca, Al, Li, Na}. These form stable octahedral [MH₆]ⁿ⁻ complexes — the key structural motif for ambient-pressure metastable superconductors (prototype: Mg₄Pt₃H₆, Tc=2.9 K).
-
-**Screening pipeline (per candidate):**
+scflow/      package: workflow, input generators, parsers, checks, Eliashberg solver, DB, CLI
+compounds/   compound configs and template.yaml
+examples/    a structure the pre-flight checks reject
+ml/          screening models
+tests/       pytest, using trimmed real QE/EPW outputs
+docker/      container build
+deploy/aws/  AWS Batch template
+scripts/     native install script
+results/     per-compound notes
+docs/        demo recording
 ```
-AIRSS random structure search at 0 + 20–50 GPa
-  → pw.x fast relaxation
-  → ph.x on 2×2×2 (dynamic stability filter — discard if imaginary at 0 GPa)
-  → pymatgen + MP API (convex hull distance — flag if > 150 meV/atom)
-  → NEB decomposition barrier (kinetic stability — keep if > 0.3 eV/atom)
-  → Full EPW Tc (finalists only)
-```
-
-**AWS budget estimate:** 100 candidates screened in ~1 week wall time (fully parallel), full EPW for top 5–10 candidates in ~2–5 days each.
-
----
 
 ## References
 
-- Drozdov et al., Nature **525**, 73 (2015) — H₃S experimental Tc=203 K
-- Wang et al., Phys. Rev. B **92**, 224507 (2015) — CaH₆ theoretical prediction
-- Poncé et al., Comput. Phys. Commun. **209**, 116 (2016) — EPW
-- Giustino et al., Phys. Rev. B **76**, 165108 (2007) — EPW method
-- Monacelli et al., J. Phys.: Condens. Matter **33**, 363001 (2021) — SSCHA review
+- P. Giannozzi et al., J. Phys.: Condens. Matter 29, 465901 (2017). Quantum ESPRESSO.
+- S. Poncé et al., Comput. Phys. Commun. 209, 116 (2016). EPW.
+- P. B. Allen and R. C. Dynes, Phys. Rev. B 12, 905 (1975).
+- A. Dal Corso, Comput. Mater. Sci. 95, 337 (2014). pslibrary.
+- H. Wang et al., PNAS 109, 6463 (2012). CaH6 prediction.
+- L. Ma et al., Phys. Rev. Lett. 128, 167001 (2022). CaH6 experiment.
+- A. P. Drozdov et al., Nature 525, 73 (2015). H3S experiment.
+- L. Monacelli et al., J. Phys.: Condens. Matter 33, 363001 (2021). SSCHA.
+
+## License
+
+MIT, see `LICENSE`. The container includes Quantum ESPRESSO, EPW, Wannier90 and pslibrary,
+which are GPL and built from their public sources.

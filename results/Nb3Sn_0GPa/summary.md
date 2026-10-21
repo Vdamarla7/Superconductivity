@@ -1,5 +1,7 @@
 # Nb3Sn @ 0 GPa — Results
 
+> **Status (2026-10-19): not completed.**
+
 ## Structure
 - Space group: Pm-3n (A15, ibrav=0 in QE)
 - Lattice parameter: A = 5.289 Å (experimental, skip_vcrelax=true)

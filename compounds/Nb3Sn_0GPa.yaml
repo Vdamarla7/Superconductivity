@@ -37,6 +37,7 @@ compound:
   pressure_GPa:  0.0
 
 structure:
+  expected_spacegroup: Pm-3n
   ibrav: 0
   nat:  8
   ntyp: 2
@@ -95,6 +96,6 @@ epw:
   wscut:       0.3             # Nb3Sn max phonon ~40 meV; wscut=7×40meV≈0.3 eV
   use_a2f:     true            # d-band: Nb-d manifold → α²F Allen-Dynes
 
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+reference:
+  tc_exp_K: 18.3
+  source: "Nb3Sn, experiment"

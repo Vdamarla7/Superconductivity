@@ -1,5 +1,7 @@
 # H₃S @ 200 GPa — Results
 
+> **Status (2026-10-19): needs re-run under scflow.** The outputs of this run were not kept, so the validation gate cannot re-check it. The configured fsthick (0.6 eV) is also below 3 × ω_max for H₃S (~0.63 eV); the gate will warn about this.
+
 ## Structure
 - Space group: Im-3m (BCC, ibrav=3 in QE)
 - Lattice parameter: A = 5.739 Å (vc-relax at 200 GPa)

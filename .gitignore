@@ -1,5 +1,14 @@
-# QE binary output (large binary files)
+# Run output, the local results DB, and personal work that is not part of the tool
 runs/
+records/
+local/
+*.model
+*.pt
+
+# Secrets
+.env
+
+# QE binary output (large binary files)
 *.wfc*
 *.save/
 *.epmatwp
@@ -18,7 +27,12 @@ runs/
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
 .venv/
+.venv-ml/
 venv/
 qe-py/
 
@@ -31,10 +45,10 @@ pslibrary/
 
 # Claude Code session state
 .claude/scheduled_tasks.lock
+.claude/settings.local.json
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
 # Temporary / crash files
 CRASH
@@ -56,3 +70,7 @@ pade_iso_*
 qdos_*
 lambda.phself.*
 linewidth.phself.*
+
+# ML training data and trained models
+ml/data/
+ml/models/

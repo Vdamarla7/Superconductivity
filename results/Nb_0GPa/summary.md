@@ -1,5 +1,7 @@
 # Nb @ 0 GPa — Results
 
+> **Status (2026-10-19): preliminary.** The EPW output currently on disk gives λ = 1.84 and Allen-Dynes Tc = 14.2 K at μ* = 0.10 (isotropic Eliashberg: 21 K), against 9.25 K in experiment. The 11.4 K quoted below is EPW's μ* = 0.18 line. The validation gate flags unconverged Wannier disentanglement and 24/3000 imaginary fine-grid modes. λ ≈ 1.84 is well above the ~1.0–1.3 usually reported for Nb, so the q-grid and fine grid need converging.
+
 ## Structure
 - Space group: Im-3m (BCC, ibrav=3 in QE)
 - Lattice parameter: A = 3.30 Å (experimental, skip_vcrelax=true)

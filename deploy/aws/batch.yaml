@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  scflow on AWS Batch — single-node MPI jobs running the scflow container.
+  Creates an S3 results bucket, an ECR repository, an EC2 (or Spot) compute
+  environment, a job queue and a job definition.
+
+Parameters:
+  VpcSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnets for the compute environment (need outbound internet or VPC endpoints for S3/ECR)
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group for the instances (outbound only is fine)
+  InstanceTypes:
+    Type: CommaDelimitedList
+    Default: c7i.8xlarge,c7i.16xlarge
+    Description: Compute-optimized instances; QE/EPW are CPU + memory bandwidth bound
+  MaxvCpus:
+    Type: Number
+    Default: 256
+  UseSpot:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: Spot is ~60-70% cheaper; scflow checkpoints per step, and Batch retries interrupted jobs
+  JobvCpus:
+    Type: Number
+    Default: 32
+  JobMemoryMiB:
+    Type: Number
+    Default: 60000
+  ImageTag:
+    Type: String
+    Default: latest
+
+Conditions:
+  Spot: !Equals [!Ref UseSpot, "true"]
+
+Resources:
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: scflow
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  JobRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: scflow-results
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:ListBucket]
+                Resource:
+                  - !GetAtt ResultsBucket.Arn
+                  - !Sub "${ResultsBucket.Arn}/*"
+
+  ComputeEnvironment:
+    Type: AWS::Batch::ComputeEnvironment
+    Properties:
+      Type: MANAGED
+      ComputeResources:
+        Type: !If [Spot, SPOT, EC2]
+        AllocationStrategy: !If [Spot, SPOT_PRICE_CAPACITY_OPTIMIZED, BEST_FIT_PROGRESSIVE]
+        MinvCpus: 0
+        MaxvCpus: !Ref MaxvCpus
+        InstanceTypes: !Ref InstanceTypes
+        Subnets: !Ref VpcSubnets
+        SecurityGroupIds: [!Ref SecurityGroup]
+        InstanceRole: !GetAtt InstanceProfile.Arn
+
+  JobQueue:
+    Type: AWS::Batch::JobQueue
+    Properties:
+      Priority: 1
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref ComputeEnvironment
+
+  JobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      Type: container
+      RetryStrategy:
+        Attempts: 3
+        EvaluateOnExit:
+          - OnStatusReason: "Host EC2*"
+            Action: RETRY
+          - OnReason: "*"
+            Action: EXIT
+      Timeout:
+        AttemptDurationSeconds: 172800
+      ContainerProperties:
+        Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/scflow:${ImageTag}"
+        JobRoleArn: !GetAtt JobRole.Arn
+        Command: ["--help"]
+        ResourceRequirements:
+          - { Type: VCPU, Value: !Ref JobvCpus }
+          - { Type: MEMORY, Value: !Ref JobMemoryMiB }
+        LinuxParameters:
+          SharedMemorySize: 8192
+        Environment:
+          - { Name: SCFLOW_NPROC, Value: !Ref JobvCpus }
+
+Outputs:
+  Bucket:
+    Value: !Ref ResultsBucket
+  JobQueue:
+    Value: !Ref JobQueue
+  JobDefinition:
+    Value: !Ref JobDefinition
+  RepositoryUri:
+    Value: !GetAtt Repository.RepositoryUri

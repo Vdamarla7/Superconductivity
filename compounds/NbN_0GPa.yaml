@@ -25,6 +25,7 @@ compound:
   pressure_GPa:  0.0
 
 structure:
+  expected_spacegroup: Fm-3m
   ibrav: 2
   A: 4.394
   nat:  2
@@ -77,6 +78,6 @@ epw:
   wscut:       0.5            # NbN max phonon ~70 meV; wscut=7x=0.5 eV
   use_a2f:     true           # d-band system: frozen window can't span Ef → use α²F path
 
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+reference:
+  tc_exp_K: 16.0
+  source: "delta-NbN, experiment (typically 16-17 K)"

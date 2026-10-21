@@ -43,6 +43,7 @@ compound:
   pressure_GPa:  0.0
 
 structure:
+  expected_spacegroup: Pm-3m
   ibrav: 0
   nat:  5
   ntyp: 3
@@ -107,6 +108,6 @@ epw:
   wscut:       0.5             # Ni max phonon ~40 meV; wscut=12×≈0.5 eV
   use_a2f:     true            # d-band: Allen-Dynes from α²F
 
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+reference:
+  tc_exp_K: 8.0
+  source: "He et al., Nature 411, 54 (2001)"

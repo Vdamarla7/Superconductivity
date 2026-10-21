@@ -1,5 +1,7 @@
 # NbN @ 0 GPa — Results
 
+> **Status (2026-10-19): invalid in the harmonic approximation.** The DFPT run on disk has an imaginary mode of −320 cm⁻¹ at X. The a2f path drops imaginary modes silently, so λ = 2.47 is not meaningful. The Tc that matches experiment (16.6 K) needed μ* = 0.18, which is a fit, not a prediction. The DFT pressure at the experimental lattice is 6.9 GPa.
+
 ## Structure
 - Space group: Fm-3m (rock salt, ibrav=2 in QE)
 - Lattice parameter: A = 4.394 Å (experimental, skip_vcrelax=true)

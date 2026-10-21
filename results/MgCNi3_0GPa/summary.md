@@ -1,5 +1,7 @@
 # MgCNi3 @ 0 GPa — Results
 
+> **Status (2026-10-19): needs re-run under scflow.** The outputs of this ph.x-route calculation were not kept, so the validation gate cannot re-check it.
+
 ## Structure
 - Space group: Pm-3m (anti-perovskite, ibrav=0 in QE)
 - Lattice parameter: A = 3.812 Å (experimental, skip_vcrelax=true)

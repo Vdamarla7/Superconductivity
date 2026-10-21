@@ -11,9 +11,11 @@ compound:
 
 # ── SECTION 2: Crystal Structure ─────────────────────────────── ← EDIT
 structure:
+  expected_spacegroup: Im-3m   # optional; pre-flight fails if spglib disagrees
   # Option A — BCC (most high-pressure hydrides):
   ibrav: 3
-  A:     3.00        # Conventional cube edge in Å — initial guess, vc-relax will refine.
+  A:     3.00        # Conventional cube edge in Å — initial guess; vc-relax refines it
+                     # unless skip_vcrelax: true is set at the top level.
 
   # Option B — FCC:
   # ibrav: 2
@@ -78,13 +80,24 @@ dft:
 epw:
   fine_kgrid:  [10, 10, 10]  # Fine grid for Wannier interpolation
                               # 10³=1000 pts for quick PoC, 20³=8000 for production
+  # fine_qgrid: [10, 10, 10]  # optional; defaults to fine_kgrid. Cost scales as Nk × Nq, so for
+                              # larger cells use a coarser q-grid than k-grid
+  # degaussw: 0.1             # optional electronic smearing (eV) for the double-delta Fermi-surface
+                              # average; EPW default 0.025. λ must be converged jointly in fine
+                              # grid AND degaussw — too small a smearing on too coarse a grid makes λ
+                              # oscillate between grids
   fsthick:     0.5            # eV — energy window around Fermi for e-ph matrix elements
   wscut:       1.5            # eV — Matsubara cutoff. Use ~10× max phonon frequency:
                               # conventional metals: 0.3 eV, hydrides: 2-4 eV
 
-# ── SECTION 7: System Paths ──────────────────────────────────── ← EDIT for new machines
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
-  # For relativistic PPs (Ir, Pt, Os, Rh, Ru):
-  # pseudo_dir: "/Users/vdark/work/quantum/pslibrary/rel-pbe/PSEUDOPOTENTIALS/"
+# ── SECTION 7: Reference (optional) ───────────────────────────
+# Used only to report agreement; it never changes the calculation.
+# reference:
+#   tc_exp_K: 9.25            # or tc_calc_K for a published calculation
+#   pressure_GPa: 0.0
+#   source: "citation"
+
+# Machine paths do not belong in compound files. Set them once per machine:
+#   export SCFLOW_QE_BIN=/path/to/qe/bin
+#   export SCFLOW_PSEUDO_DIR=/path/to/pslibrary/pbe/PSEUDOPOTENTIALS
+# (the scflow container sets both). Optional: SCFLOW_NPROC, SCFLOW_MPIRUN.

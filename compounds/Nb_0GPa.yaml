@@ -28,6 +28,7 @@ compound:
   pressure_GPa:  0.0
 
 structure:
+  expected_spacegroup: Im-3m
   ibrav: 3
   A: 3.30
   nat:  1
@@ -70,6 +71,6 @@ epw:
   wscut:       0.3             # Nb max phonon ~25 meV; wscut=12x≈0.3 eV
   use_a2f:     true            # d-band: use α²F Allen-Dynes path
 
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+reference:
+  tc_exp_K: 9.25
+  source: "elemental Nb, experiment"

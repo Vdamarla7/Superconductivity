@@ -9,6 +9,7 @@ compound:
   pressure_GPa:  200.0
 
 structure:
+  expected_spacegroup: Im-3m
   ibrav: 3           # BCC primitive cell (Im-3m space group)
   A:     2.986089    # Conventional BCC cube edge (Å) from vc-relax at 200 GPa
                      # Set to null to run vc-relax first and determine automatically
@@ -52,6 +53,7 @@ epw:
   wscut:       3.0            # eV — Matsubara cutoff (~10× max phonon freq)
                               # H3S max phonon ~210 meV → wscut ≥ 2.1 eV
 
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+reference:
+  tc_calc_K: 200
+  pressure_GPa: 200
+  source: "Duan et al., Sci. Rep. 4, 6968 (2014): 191–204 K at 200 GPa. Experiment: 203 K at ~155 GPa (Drozdov et al., Nature 525, 73 (2015))"

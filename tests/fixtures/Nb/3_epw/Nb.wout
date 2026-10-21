@@ -1,0 +1,22 @@
+     <<< Warning: Maximum number of disentanglement iterations reached >>>
+          <<< Disentanglement convergence criteria not satisfied >>>
+ Final State
+  WF centre and spread    1  (  0.002016, -0.057176,  0.017165 )     2.25833081
+  WF centre and spread    2  (  0.018601, -0.033469, -0.017549 )     2.44554931
+  WF centre and spread    3  ( -0.003987, -0.011265,  0.014968 )     2.60206217
+  WF centre and spread    4  (  0.010103,  0.002663, -0.016713 )     2.19072884
+  WF centre and spread    5  (  0.026704, -0.000454,  0.003671 )     2.43349170
+  Sum of centres and spreads (  0.053437, -0.099701,  0.001541 )    11.93016283
+
+         Spreads (Ang^2)       Omega I      =     7.531056547
+        ================       Omega D      =     0.160113529
+                               Omega OD     =     4.238992758
+    Final Spread (Ang^2)       Omega Total  =    11.930162834
+ ------------------------------------------------------------------------------
+
+ Writing checkpoint file Nb.chk... done
+
+ Time for wannierise            1.164 (sec)
+ *---------------------------------------------------------------------------*
+ |                               PLOTTING                                    |
+ *---------------------------------------------------------------------------*

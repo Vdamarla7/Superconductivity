@@ -3,7 +3,7 @@ QE and EPW input file generators.
 Each function takes a config dict (loaded from compound YAML) and returns a string.
 """
 
-from kpoints import gen_kpoints_crystal, gen_kpoints_automatic
+from .kpoints import gen_kpoints_crystal, gen_kpoints_automatic
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,8 +130,11 @@ def gen_scf(cfg):
     p = cfg["compound"]
     s = cfg["structure"]
     d = cfg["dft"]
+    w = cfg.get("wannier", {})
     cell_lines = _cell_section(cfg)
     cell_params = _cell_parameters_block(cfg)
+    # Include nbnd from wannier config so ph.x DFPT has enough empty bands.
+    nbnd_line = f"  nbnd     = {w['nbnd']}\n" if w.get("nbnd") else ""
 
     return f"""\
 &CONTROL
@@ -154,12 +157,13 @@ def gen_scf(cfg):
   occupations = 'smearing'
   smearing    = 'mp'
   degauss     = {d['degauss']}
-/
+{nbnd_line}/
 
 &ELECTRONS
-  conv_thr    = 1.0d-12
-  mixing_beta = 0.4
-  diagonalization = 'david'
+  conv_thr         = 1.0d-12
+  mixing_beta      = 0.4
+  diagonalization  = 'david'
+  diago_full_acc   = .true.
 /
 
 {_atomic_species_block(cfg)}
@@ -192,9 +196,9 @@ Phonon calculation for {p['prefix']} at {p['pressure_GPa']} GPa
   nq1           = {q[0]}
   nq2           = {q[1]}
   nq3           = {q[2]}
-  tr2_ph        = 1.0d-12
+  tr2_ph        = 1.0d-14
   alpha_mix(1)  = 0.1
-  nmix_ph       = 8
+  nmix_ph       = 4
 /
 """
 
@@ -259,6 +263,7 @@ def gen_nscf(cfg):
 &CONTROL
   calculation   = 'nscf'
   restart_mode  = 'from_scratch'
+  verbosity     = 'high'
   prefix        = '{p['prefix']}'
   outdir        = './tmp/'
   pseudo_dir    = '{cfg['paths']['pseudo_dir']}'
@@ -326,10 +331,10 @@ def gen_epw_pass1(cfg):
   epwwrite      = .true.
   epwread       = .false.
   ephwrite      = .false.
-  kmaps         = .false.
 
   wannierize    = .true.
   num_iter      = 500
+  wdata(1)      = 'dis_num_iter = 2000'
   nbndsub       = {w['nbndsub']}
 {bands_skipped_line}{_projections_block(cfg)}
 
@@ -384,6 +389,7 @@ def gen_epw_pass2(cfg):
     nq = d["coarse_kgrid"]
     nk = d.get("epw_coarse_kgrid", nq)
     nkf = e["fine_kgrid"]
+    nqf = e.get("fine_qgrid", nkf)
 
     bands_skipped_line = ""
     if w.get("bands_skipped"):
@@ -401,7 +407,6 @@ def gen_epw_pass2(cfg):
   epbread       = .false.
   epwwrite      = .false.
   epwread       = .true.
-  kmaps         = .true.
 
   wannierize    = .false.
   num_iter      = 500
@@ -418,8 +423,8 @@ def gen_epw_pass2(cfg):
   mp_mesh_k     = .false.
 
   nkf1 = {nkf[0]}  nkf2 = {nkf[1]}  nkf3 = {nkf[2]}
-  nqf1 = {nkf[0]}  nqf2 = {nkf[1]}  nqf3 = {nkf[2]}
-
+  nqf1 = {nqf[0]}  nqf2 = {nqf[1]}  nqf3 = {nqf[2]}
+{f"  degaussw      = {e['degaussw']}" + chr(10) if e.get('degaussw') else ""}
   dvscf_dir     = '../2_phonons/save'
   iverbosity    = 0
 """
@@ -452,7 +457,7 @@ def gen_epw_pass2(cfg):
   liso          = .true.
   laniso        = .false.
   limag         = .true.
-  lpade         = .true.
+  lpade         = .false.
 
   muc           = {el['muc']}
   nsiter        = 500

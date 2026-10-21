@@ -1,0 +1,70 @@
+# ════════════════════════════════════════════════════════════════
+#  TEACHING EXAMPLE — a structure that is wrong but passes symmetry checks.
+#  H sits on Im-3m 12e (x=1/4) instead of 12d (1/4,0,1/2). spglib still
+#  reports Im-3m with 48 operations, but Ca–H = 0.91 Å.
+#  `scflow check examples/CaH6_wrong_site.yaml` rejects it in under a second.
+#  In a full run it gives a DFT pressure of 427 GPa (target 200) and
+#  imaginary modes across the whole Γ spectrum.
+# ════════════════════════════════════════════════════════════════
+
+compound:
+  prefix:       "CaH6_wrong"
+  pressure_GPa: 200.0
+
+structure:
+  expected_spacegroup: Im-3m
+  ibrav: 0
+  cell_parameters_angstrom:        # a = 3.64 Å
+    - [-1.820000,  1.820000,  1.820000]
+    - [ 1.820000, -1.820000,  1.820000]
+    - [ 1.820000,  1.820000, -1.820000]
+  nat:  7
+  ntyp: 2
+  species:
+    - {symbol: Ca, mass: 40.078,   pseudo: Ca.pbe-spn-rrkjus_psl.1.0.0.UPF}
+    - {symbol: H,  mass: 1.00794,  pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
+  positions:
+    - [Ca, 0.00, 0.00, 0.00]
+    - [H,  0.00, 0.25, 0.25]      # = Im-3m 12e (1/4,0,0): 0.91 Å from Ca
+    - [H,  0.00, 0.75, 0.75]
+    - [H,  0.25, 0.00, 0.25]
+    - [H,  0.75, 0.00, 0.75]
+    - [H,  0.25, 0.25, 0.00]
+    - [H,  0.75, 0.75, 0.00]
+
+wannier:
+  nbndsub:     11             # Ca:d (5) + 6×H:s (6)
+  nbnd:        30
+  bands_skipped: "exclude_bands = 1-4"   # Ca 3s + 3p semicore
+  projections:
+    - "Ca:d"
+    - "H:s"
+  # SCF Ef = 17.16 eV at 200 GPa. dis_froz_max is provisional: take the value
+  # printed by the NSCF window scan, then `--reset-epw --start-from epw1`.
+  dis_win_min:   0.0
+  dis_win_max:  45.0
+  dis_froz_min:  0.0
+  dis_froz_max: 19.0
+
+eliashberg:
+  muc:            0.10
+  temperatures_K: [100, 150, 175, 200, 225, 250]
+
+dft:
+  ecutwfc:    80.0
+  ecutrho:   800.0
+  degauss:     0.02
+  scf_kgrid:  [12, 12, 12]
+  coarse_kgrid: [4, 4, 4]       # DFPT q-grid
+  epw_coarse_kgrid: [8, 8, 8]   # Wannier k-grid (multiple of the q-grid)
+
+epw:
+  fine_kgrid:  [20, 20, 20]
+  fsthick:     1.0              # ≥ 3 × ω_max (~250 meV)
+  wscut:       3.0              # ≥ 10 × ω_max
+  use_a2f:     true             # α²F path; scflow solves the Eliashberg equations from α²F independently
+
+reference:
+  tc_exp_K: 215
+  pressure_GPa: 172
+  source: "Ma et al., PRL 128, 167001 (2022): 215 K at 172 GPa (no measurement at 200 GPa)"

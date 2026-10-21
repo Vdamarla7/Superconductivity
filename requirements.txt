@@ -1,7 +1,0 @@
-pyyaml>=6.0
-# For SSCHA anharmonic phonon renormalization (optional):
-# python-sscha>=1.3
-# cellconstructor>=1.3
-# spglib>=2.0      (structure validation)
-# pymatgen>=2023   (convex hull / MP API, Phase 2 screening)
-# ase>=3.22        (structure manipulation, AIRSS interface)

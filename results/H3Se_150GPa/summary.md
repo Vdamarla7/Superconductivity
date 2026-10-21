@@ -1,5 +1,7 @@
 # H₃Se @ 150 GPa — Results
 
+> **Status (2026-10-19): needs re-run under scflow.** The old orchestrator never actually ran vc-relax when `A` was set, so this calculation used the initial-guess lattice (3.30 Å). The actual DFT pressure was never checked.
+
 ## Structure
 - Space group: Im-3m (BCC, ibrav=2 in QE)
 - Lattice parameter: A = 5.832 Å (vc-relax at 150 GPa)

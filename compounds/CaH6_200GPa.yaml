@@ -1,77 +1,84 @@
 # ════════════════════════════════════════════════════════════════
-#  Compound: CaH₆ (Im-3m) at 200 GPa
-#  Reference: Wang et al., Phys. Rev. B 86, 014110 (2012)
-#  Expected: Allen-Dynes Tc ≈ 220–235 K
+#  Compound: CaH₆ (Im-3m, sodalite-like H₂₄ clathrate) at 200 GPa
+#  First predicted: Wang et al., PNAS 109, 6463 (2012)
+#  Experiment:      215 K at 172 GPa (Ma et al., PRL 128, 167001 (2022))
 #
-#  Why 200 GPa: 150 GPa shows 100 imaginary modes in harmonic PBE
-#  (dynamically unstable, same issue as H3S@150GPa).
-#  200 GPa stabilizes the structure.
+#  Structure (conventional bcc cell): Ca at 2a (0,0,0), H at 12d (1/4,0,1/2).
+#  Ca–H = 2.04 Å, H–H = 1.29 Å at a = 3.64 Å.
 #
-#  Structure: ibrav=0 required — H at 12e Wyckoff (0.25/0.75 coords)
-#  gives only 4 sym ops with ibrav=3. ibrav=0 gives 48.
+#  HISTORY: earlier versions of this file put H on 12e (x=1/4) — Ca–H 0.91 Å.
+#  That structure has the same space group and 48 sym ops, so symmetry checks
+#  passed, but its DFT pressure was 427 GPa and every Γ mode was imaginary.
+#  The "harmonic instability" that motivated SSCHA came from that error.
+#  With H on 12d the structure relaxes to a = 3.398 Å at 200 GPa
+#  (PBE, pslibrary USPP, 80 Ry) and all Γ modes are real (1090–2079 cm⁻¹).
 #
-#  Wannier: Ca has 4 deep core bands (3s at -35 eV, 3p at -17 eV)
-#  that must be excluded. bands_skipped = 'exclude_bands = 1-4'
-#  leaves 8 valence + Ca-d + H-s bands for Wannierization.
+#  ibrav=0: 12d positions are not all 0/0.5, so ibrav=3 would lose symmetry.
+#  Positions below are in the bcc primitive basis.
 # ════════════════════════════════════════════════════════════════
 
-skip_vcrelax: true
-
 compound:
-  prefix:       "CaH6_200"
-  pressure_GPa:  200.0
+  prefix:       "CaH6"
+  pressure_GPa: 200.0
 
 structure:
+  expected_spacegroup: Im-3m
   ibrav: 0
-  # BCC primitive vectors for A=3.64 Å (literature at 200 GPa)
-  cell_parameters_angstrom:
-    - [-1.820000,  1.820000,  1.820000]
-    - [ 1.820000, -1.820000,  1.820000]
-    - [ 1.820000,  1.820000, -1.820000]
+  cell_parameters_angstrom:        # a = 3.398 Å (vc-relaxed at 200 GPa); vc-relax refines it
+    - [-1.699096,  1.699096,  1.699096]
+    - [ 1.699096, -1.699096,  1.699096]
+    - [ 1.699096,  1.699096, -1.699096]
   nat:  7
   ntyp: 2
   species:
     - {symbol: Ca, mass: 40.078,   pseudo: Ca.pbe-spn-rrkjus_psl.1.0.0.UPF}
     - {symbol: H,  mass: 1.00794,  pseudo: H.pbe-rrkjus_psl.1.0.0.UPF}
   positions:
-    - [Ca, 0.000, 0.000, 0.000]
-    - [H,  0.000, 0.250, 0.250]
-    - [H,  0.000, 0.750, 0.750]
-    - [H,  0.250, 0.000, 0.250]
-    - [H,  0.750, 0.000, 0.750]
-    - [H,  0.250, 0.250, 0.000]
-    - [H,  0.750, 0.750, 0.000]
+    - [Ca, 0.00, 0.00, 0.00]
+    - [H,  0.50, 0.75, 0.25]
+    - [H,  0.50, 0.25, 0.75]
+    - [H,  0.25, 0.50, 0.75]
+    - [H,  0.75, 0.50, 0.25]
+    - [H,  0.75, 0.25, 0.50]
+    - [H,  0.25, 0.75, 0.50]
 
 wannier:
-  nbndsub:     11             # Ca:d (5) + 6×H:s (6) = 11
-  nbnd:        30
-  bands_skipped: "exclude_bands = 1-4"   # Ca 3s (-35 eV) + Ca 3p (-17 eV) core bands
+  nbndsub:     11             # Ca:d (5) + 6×H:s (6)
+  nbnd:        34             # 30 ended inside a degenerate multiplet at some q → NaN couplings
+  bands_skipped: "exclude_bands = 1-4"   # Ca 3s + 3p semicore
   projections:
     - "Ca:d"
     - "H:s"
-  # Windows relative to NSCF Ef (check nscf.out after running)
-  # At 200 GPa: Ef expected ~12-15 eV. Will update after SCF.
-  dis_win_min:  -2.0          # just below the valence band minimum (after excluding cores)
-  dis_win_max:  40.0
-  dis_froz_min: -2.0
-  dis_froz_max: 16.0          # to be confirmed from NSCF eigenvalues
+  # Ef = 17.16 eV at 200 GPa. NSCF scan (8³ k): ≤ 9 bands frozen up to 23.2 eV. dis_froz_max
+  # must also keep clear of every band energy: 22.5 eV was 5 meV from a degenerate pair and gave
+  # NaN couplings; 21.2 eV has 223 meV clearance.
+  dis_win_min:   0.0
+  dis_win_max:  45.0
+  dis_froz_min:  0.0
+  dis_froz_max: 21.2
 
 eliashberg:
   muc:            0.10
-  temperatures_K: [5, 8, 12, 16, 19, 21]   # must stay below Allen-Dynes Tc=22.6 K (harmonic; real Tc needs SSCHA)
+  temperatures_K: [100, 150, 175, 200, 225, 250]
 
 dft:
   ecutwfc:    80.0
   ecutrho:   800.0
   degauss:     0.02
-  scf_kgrid:  [8, 8, 8]
-  coarse_kgrid: [4, 4, 4]
+  scf_kgrid:  [12, 12, 12]
+  coarse_kgrid: [4, 4, 4]       # DFPT q-grid
+  # Wannier k-grid = q-grid. With epw_coarse_kgrid 8³ EPW 5.9 produced NaN couplings for this
+  # structure (open issue; electronic and phonon Wannier objects were clean).
 
 epw:
-  fine_kgrid:  [10, 10, 10]
-  fsthick:     1.0
-  wscut:       3.0
+  fine_kgrid:  [32, 32, 32]
+  fine_qgrid:  [16, 16, 16]     # cost ∝ Nk × Nq; densify both to reach the `converged` tier
+  fsthick:     1.0              # ≥ 3 × ω_max (~250 meV)
+  degaussw:    0.1              # eV; λ converged to 7% between k24/q12 and k32/q16 at this smearing
+  wscut:       3.0              # ≥ 10 × ω_max
+  use_a2f:     true             # α²F path; scflow solves the Eliashberg equations from α²F independently
 
-paths:
-  qe_bin:      "/Users/vdark/work/quantum/qe-7.4.1/bin"
-  pseudo_dir:  "/Users/vdark/work/quantum/pslibrary/pbe/PSEUDOPOTENTIALS/"
+reference:
+  tc_exp_K: 215
+  pressure_GPa: 172
+  source: "Ma et al., PRL 128, 167001 (2022): 215 K at 172 GPa (no measurement at 200 GPa)"
